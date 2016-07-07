@@ -28,20 +28,27 @@ import java.math.BigDecimal;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 
+import org.junit.BeforeClass;
 import org.voltdb.BackendTarget;
 import org.voltdb.LRRHelper;
+import org.voltdb.ServerThread;
 import org.voltdb.VoltTable;
 import org.voltdb.VoltType;
 import org.voltdb.client.Client;
+import org.voltdb.client.ClientFactory;
 import org.voltdb.client.NoConnectionsException;
 import org.voltdb.client.ProcCallException;
 import org.voltdb.compiler.AsyncCompilerAgent;
 import org.voltdb.compiler.VoltProjectBuilder;
 import org.voltdb.jni.ExecutionEngine;
+import org.voltdb.utils.CSVLoader;
 
 public class TestLongRunningReadQuery extends RegressionSuite {
 
-    private static int tableSize = 1000000;
+    private int tableSize = 1000000;
+    final String reportDir = "/home/user/workspace/voltdb";
+    final String path_csv = String.format("%s/%s", reportDir, "mydata.csv");
+    protected String userName = System.getProperty("user.name");
 
     private void checkProcStatistics(Client client)
             throws NoConnectionsException, IOException, ProcCallException {
@@ -51,6 +58,17 @@ public class TestLongRunningReadQuery extends RegressionSuite {
         //System.out.println(vt.toString());
 
     }
+    
+    private void loadTable() throws IOException, InterruptedException{
+        String []myOptions = {
+                "-f" + path_csv,
+                "--port=21312",
+                "--limitrows=" + tableSize,
+                "R1"
+        };
+    	CSVLoader.testMode = true;
+    	CSVLoader.main(myOptions);
+    }
 
     private void fillTable(Client client) throws NoConnectionsException, IOException, ProcCallException {
         String sql;
@@ -58,21 +76,19 @@ public class TestLongRunningReadQuery extends RegressionSuite {
             sql = "INSERT INTO R1 VALUES (" + i + ");";
             client.callProcedure("@AdHoc", sql);
         }
-
     }
 
-
-    public void testLongRunningReadQuery() throws IOException, ProcCallException {
+    public void testLongRunningReadQuery() throws IOException, ProcCallException, InterruptedException {
          System.out.println("testLongRunningReadQuery...");
-
+         
+         loadTable();
+         
          Client client = getClient();
 
-         fillTable(client);
          checkProcStatistics(client);
 
          subtest1Select(client);
          checkProcStatistics(client);
-
     }
 
     public void subtest1Select(Client client) throws IOException, ProcCallException {
@@ -81,10 +97,11 @@ public class TestLongRunningReadQuery extends RegressionSuite {
         VoltTable vt;
         String sql;
 
-
         sql = "SELECT * FROM R1;";
         files = client.callProcedure("@ReadOnlySlow", sql).getResults()[0];
+        //System.out.println(files.toString());
         vt = LRRHelper.getTableFromFileTable(files);
+        //System.out.println(vt.toString());
         assertEquals(tableSize,vt.getRowCount());
     }
 
@@ -103,7 +120,17 @@ public class TestLongRunningReadQuery extends RegressionSuite {
         VoltProjectBuilder project = new VoltProjectBuilder();
         final String literalSchema =
                 "CREATE TABLE R1 ( " +
-                " ID BIGINT DEFAULT 0 NOT NULL);"
+                " ID INT DEFAULT 0 NOT NULL"
+                + ", COL1 INT "
+                + ", COL2 INT "
+                + ", COL3 INT "
+                + ", COL4 INT "
+                + ", COL5 INT "
+                + ", COL6 INT "
+                + ", COL7 INT "
+                + ", COL8 INT "
+                + ", COL9 INT "
+                + ");"
                 + ""
                 ;
         try {
