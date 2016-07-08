@@ -122,6 +122,7 @@ def run_once(name, command, statements_path, results_path, submit_verbosely, tes
             port = testConfigKit["hostport"]
 
     global normalize
+    global precision
     if(host == defaultHost):
         server = subprocess.Popen(command + " backend=" + name, shell=True)
 
@@ -182,7 +183,10 @@ def run_once(name, command, statements_path, results_path, submit_verbosely, tes
             break
         if client.response.tables:
             ### print "DEBUG: got table(s) from ", statement["SQL"] ,"."
-            table = normalize(client.response.tables[0], statement["SQL"])
+            if precision:
+                table = normalize(client.response.tables[0], statement["SQL"], precision)
+            else:
+                table = normalize(client.response.tables[0], statement["SQL"])
             if len(client.response.tables) > 1:
                 print "WARNING: ignoring extra table(s) from result of query ?", statement["SQL"] , "?"
         # else:
@@ -216,10 +220,15 @@ def run_config(suite_name, config, basedir, output_dir, random_seed,
     # Store the current, initial system time (in seconds since January 1, 1970)
     time0 = time.time()
 
+    global precision
+    precision = 0
     for key in config.iterkeys():
         print "in run_config key = '%s', config[key] = '%s'" % (key, config[key])
-        if not os.path.isabs(config[key]):
-            config[key] = os.path.abspath(os.path.join(basedir, config[key]))
+        if key == "precision":
+            precision = int(config["precision"])
+        else:
+            if not os.path.isabs(config[key]):
+                config[key] = os.path.abspath(os.path.join(basedir, config[key]))
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
 
@@ -743,19 +752,8 @@ if __name__ == "__main__":
                             options.report_all, options.ascii_only, args, testConfigKits)
         statistics[config_name] = result["keyStats"]
         statistics["seed"] = seed
-        # kludge to not fail for known issues in the numeric-decimals and
-        # numeric-ints "extended" test suites, when running against PostgreSQL
-        # (or PostGIS/PostgreSQL); see ENG-10546
-        if config_name == 'numeric-decimals' and comparison_database.startswith('Post'):
-            if result["mis"] > 1180:
-                success = False
-        elif config_name == 'numeric-ints' and comparison_database.startswith('Post'):
-            if result["mis"] > 2820:
-                success = False
-        else:
-            # end of kludge; the following are the normal behavior:
-            if result["mis"] != 0:
-                success = False
+        if result["mis"] != 0:
+            success = False
 
     # Write the summary
     time1 = time.time()
