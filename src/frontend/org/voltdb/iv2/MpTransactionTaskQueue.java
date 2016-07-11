@@ -24,6 +24,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.Set;
 
 import org.voltcore.logging.VoltLogger;
 import org.voltdb.CatalogContext;
@@ -31,6 +32,8 @@ import org.voltdb.CatalogSpecificPlanner;
 import org.voltdb.exceptions.TransactionRestartException;
 import org.voltdb.messaging.FragmentResponseMessage;
 import org.voltdb.messaging.FragmentTaskMessage;
+
+import com.google_voltpatches.common.collect.HashMultimap;
 
 /**
  * Provide an implementation of the TransactionTaskQueue specifically for the MPI.
@@ -40,12 +43,16 @@ import org.voltdb.messaging.FragmentTaskMessage;
 public class MpTransactionTaskQueue extends TransactionTaskQueue
 {
     protected static final VoltLogger tmLog = new VoltLogger("TM");
+    
+    private static final boolean debugMPTT = true; // XXX REMOVE ME!!
 
     // Track the current writes and reads in progress.  If writes contains anything, reads must be empty,
     // and vice versa
     private final Map<Long, TransactionTask> m_currentWrites = new HashMap<Long, TransactionTask>();
     private final Map<Long, TransactionTask> m_currentReads = new HashMap<Long, TransactionTask>();
     private Deque<TransactionTask> m_backlog = new ArrayDeque<TransactionTask>();
+    private final HashMultimap<Integer, Long> m_currentWriteSites = HashMultimap.create();
+    private final HashMultimap<Integer, Long> m_currentReadSites = HashMultimap.create();
 
     private MpRoSitePool m_sitePool = null;
 
@@ -163,6 +170,29 @@ public class MpTransactionTaskQueue extends TransactionTaskQueue
             m_taskQueue.offer(task);
         }
     }
+    
+    private boolean hasReadSiteConflicts(TransactionTask task) {
+        HashMultimap<Integer,Long> currentReadSitesCopy = HashMultimap.create(m_currentReadSites);
+
+        currentReadSitesCopy.keySet().retainAll(((MpTransactionState) task.getTransactionState()).getMasterHSIds().keySet());
+        if(debugMPTT && !currentReadSitesCopy.isEmpty()) {
+        	System.out.println("Read conflict!");
+        	System.out.println("Read sites: " + m_currentReadSites);
+        }
+    	return !currentReadSitesCopy.isEmpty();
+    }
+    
+    private boolean hasWriteSiteConflicts(TransactionTask task) {
+    	HashMultimap<Integer,Long> currentWriteSitesCopy = HashMultimap.create(m_currentWriteSites);
+        System.out.println(((MpTransactionState) task.getTransactionState()).getMasterHSIds());
+
+        currentWriteSitesCopy.keySet().retainAll(((MpTransactionState) task.getTransactionState()).getMasterHSIds().keySet());
+        if(debugMPTT && !currentWriteSitesCopy.isEmpty()) {
+        	System.out.println("Write conflict!");
+        	System.out.println("Write sites: " + m_currentWriteSites);
+        }
+    	return !currentWriteSitesCopy.isEmpty();
+    }
 
     private boolean taskQueueOffer()
     {
@@ -182,20 +212,33 @@ public class MpTransactionTaskQueue extends TransactionTaskQueue
             // We may not queue the next task, just peek to get the read-only state
             TransactionTask task = m_backlog.peekFirst();
             if (!task.getTransactionState().isReadOnly()) {
-                if (m_currentReads.isEmpty() && m_currentWrites.isEmpty()) {
+            	// XXX Add mode for broad R/W lock
+                //if (m_currentReads.isEmpty() && m_currentWrites.isEmpty()) {
+                if (!hasReadSiteConflicts(task) && !hasWriteSiteConflicts(task)) {
                     task = m_backlog.pollFirst();
                     m_currentWrites.put(task.getTxnId(), task);
+                    for (Entry<Integer, Long> entry : ((MpTransactionState) task.getTransactionState()).getMasterHSIds().entrySet())
+                    m_currentWriteSites.put(entry.getKey(), entry.getValue());
+                    if (debugMPTT) {
+                    	System.out.println("Added Write sites: " + m_currentWriteSites);
+                    }
                     taskQueueOffer(task);
                     retval = true;
                 }
             }
-            else if (m_currentWrites.isEmpty()) {
+            //else if (m_currentWrites.isEmpty()) {
+            else {
                 while (task != null && task.getTransactionState().isReadOnly() &&
-                       m_sitePool.canAcceptWork())
+                		!hasWriteSiteConflicts(task) && m_sitePool.canAcceptWork())
                 {
                     task = m_backlog.pollFirst();
                     assert(task.getTransactionState().isReadOnly());
                     m_currentReads.put(task.getTxnId(), task);
+                    for (Entry<Integer, Long> entry : ((MpTransactionState) task.getTransactionState()).getMasterHSIds().entrySet())
+                    m_currentReadSites.put(entry.getKey(), entry.getValue());
+                    if (debugMPTT) {
+                    	System.out.println("Added Read sites: " + m_currentReadSites);
+                    }
                     taskQueueOffer(task);
                     retval = true;
                     // Prime the pump with the head task, if any.  If empty,
@@ -218,11 +261,27 @@ public class MpTransactionTaskQueue extends TransactionTaskQueue
     {
         int offered = 0;
         if (m_currentReads.containsKey(txnId)) {
+        	TransactionTask task = m_currentReads.get(txnId);
+        	Iterator<Integer> iter = ((MpTransactionState) task.getTransactionState()).getMasterHSIds().keySet().iterator();
+            while(iter.hasNext()) {
+            	m_currentReadSites.remove(iter.next(),txnId);
+            }
+            if (debugMPTT) {
+            	System.out.println("Removed Read sites: " + m_currentReadSites);
+            }
             m_currentReads.remove(txnId);
             m_sitePool.completeWork(txnId);
         }
         else {
             assert(m_currentWrites.containsKey(txnId));
+        	TransactionTask task = m_currentWrites.get(txnId);
+        	Iterator<Integer> iter = ((MpTransactionState) task.getTransactionState()).getMasterHSIds().keySet().iterator();
+            while(iter.hasNext()) {
+            	m_currentWriteSites.remove(iter.next(),txnId);
+            }
+            if (debugMPTT) {
+            	System.out.println("Removed Write sites: " + m_currentWriteSites);
+            }
             m_currentWrites.remove(txnId);
             assert(m_currentWrites.isEmpty());
         }
