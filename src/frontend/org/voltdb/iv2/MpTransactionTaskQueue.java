@@ -184,7 +184,6 @@ public class MpTransactionTaskQueue extends TransactionTaskQueue
     
     private boolean hasWriteSiteConflicts(TransactionTask task) {
     	HashMultimap<Integer,Long> currentWriteSitesCopy = HashMultimap.create(m_currentWriteSites);
-        System.out.println(((MpTransactionState) task.getTransactionState()).getMasterHSIds());
 
         currentWriteSitesCopy.keySet().retainAll(((MpTransactionState) task.getTransactionState()).getMasterHSIds().keySet());
         if(debugMPTT && !currentWriteSitesCopy.isEmpty()) {
@@ -211,40 +210,51 @@ public class MpTransactionTaskQueue extends TransactionTaskQueue
         if (!m_backlog.isEmpty()) {
             // We may not queue the next task, just peek to get the read-only state
             TransactionTask task = m_backlog.peekFirst();
-            if (!task.getTransactionState().isReadOnly()) {
-            	// XXX Add mode for broad R/W lock
-                //if (m_currentReads.isEmpty() && m_currentWrites.isEmpty()) {
-                if (!hasReadSiteConflicts(task) && !hasWriteSiteConflicts(task)) {
-                    task = m_backlog.pollFirst();
+            
+            if (task != null) {
+            	System.out.println("Checking task " + task.getTxnId()+ " RO " + task.getTransactionState().isReadOnly() + " w/ sites " + ((MpTransactionState) task.getTransactionState()).getMasterHSIds().keySet());
+            }
+            
+            while (task != null &&
+            		((!task.getTransactionState().isReadOnly() && !hasReadSiteConflicts(task) && !hasWriteSiteConflicts(task)) ||
+            		(task.getTransactionState().isReadOnly() && !hasWriteSiteConflicts(task) && m_sitePool.canAcceptWork()))
+            		) {
+            	task = m_backlog.pollFirst();
+            	System.out.println("Adding task " + task.getTxnId() + " RO " + task.getTransactionState().isReadOnly());
+            	if (!task.getTransactionState().isReadOnly()) {
+            		// XXX Add mode for broad R/W lock
+            		//if (m_currentReads.isEmpty() && m_currentWrites.isEmpty()) {
+                
                     m_currentWrites.put(task.getTxnId(), task);
-                    for (Entry<Integer, Long> entry : ((MpTransactionState) task.getTransactionState()).getMasterHSIds().entrySet())
-                    m_currentWriteSites.put(entry.getKey(), entry.getValue());
+                    for (Entry<Integer, Long> entry : ((MpTransactionState) task.getTransactionState()).getMasterHSIds().entrySet()) {
+                    	m_currentWriteSites.put(entry.getKey(), task.getTxnId());
+                    }
                     if (debugMPTT) {
                     	System.out.println("Added Write sites: " + m_currentWriteSites);
                     }
                     taskQueueOffer(task);
                     retval = true;
                 }
-            }
-            //else if (m_currentWrites.isEmpty()) {
-            else {
-                while (task != null && task.getTransactionState().isReadOnly() &&
-                		!hasWriteSiteConflicts(task) && m_sitePool.canAcceptWork())
-                {
-                    task = m_backlog.pollFirst();
+            
+            	//else if (m_currentWrites.isEmpty()) {
+            	else {
+                
                     assert(task.getTransactionState().isReadOnly());
                     m_currentReads.put(task.getTxnId(), task);
-                    for (Entry<Integer, Long> entry : ((MpTransactionState) task.getTransactionState()).getMasterHSIds().entrySet())
-                    m_currentReadSites.put(entry.getKey(), entry.getValue());
+                    for (Entry<Integer, Long> entry : ((MpTransactionState) task.getTransactionState()).getMasterHSIds().entrySet()) {
+                    	m_currentReadSites.put(entry.getKey(), task.getTxnId());
+                    }
                     if (debugMPTT) {
                     	System.out.println("Added Read sites: " + m_currentReadSites);
                     }
                     taskQueueOffer(task);
                     retval = true;
-                    // Prime the pump with the head task, if any.  If empty,
-                    // task will be null
-                    task = m_backlog.peekFirst();
+                    
                 }
+            	// Prime the pump with the head task, if any.  If empty,
+                // task will be null
+                task = m_backlog.peekFirst();
+            
             }
         }
         return retval;

@@ -27,6 +27,7 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
 
+import org.json_voltpatches.JSONArray;
 import org.json_voltpatches.JSONException;
 import org.json_voltpatches.JSONObject;
 import org.voltcore.logging.VoltLogger;
@@ -48,6 +49,7 @@ import org.voltdb.messaging.InitiateResponseMessage;
 import org.voltdb.messaging.Iv2EndOfLogMessage;
 import org.voltdb.messaging.Iv2InitiateTaskMessage;
 import org.voltdb.sysprocs.BalancePartitionsRequest;
+import org.voltdb.sysprocs.BalancePartitionsRequest.PartitionPair;
 import org.voltdb.utils.MiscUtils;
 
 import com.google_voltpatches.common.collect.Maps;
@@ -297,8 +299,14 @@ public class MpScheduler extends Scheduler
                     message.isForReplay());
         // Multi-partition initiation (at the MPI)
         MpProcedureTask task = null;
-        if (isNpTxn(message) && NpProcedureTaskConstructor != null) {
-            Set<Integer> involvedPartitions = getBalancePartitions(message);
+        if (NpProcedureTaskConstructor != null) {
+        	Set<Integer> involvedPartitions = null;
+        	if (isNpTxn(message)) {
+        		involvedPartitions = getBalancePartitions(message);
+        	} else {
+        		// Generic multi-partition transaction, see if the planner provided a subset of partitions
+        		involvedPartitions = getInvolvedPartitions(message);
+        	}
             if (involvedPartitions != null) {
                 HashMap<Integer, Long> involvedPartitionMasters = Maps.newHashMap(m_partitionMasters);
                 involvedPartitionMasters.keySet().retainAll(involvedPartitions);
@@ -348,6 +356,31 @@ public class MpScheduler extends Scheduler
             hostLog.warn("Unable to determine partitions for @BalancePartitions", e);
             return null;
         }
+    }
+    
+    /**
+     * Extract involved partitions from a request.
+     */
+    private Set<Integer> getInvolvedPartitions(Iv2InitiateTaskMessage msg)
+    {
+    	return null;
+    	/*
+        try {
+            JSONObject jsObj = new JSONObject(msg.getParameters()[0]);
+            JSONArray partitionArray = jsObj.getJSONArray("partitionIds");
+            Set<Integer> partitionSet = Sets.newHashSet();
+
+            for (int i = 0; i < partitionArray.length(); i++) {
+                JSONObject partitionObj = partitionArray.getJSONObject(i);
+                partitionSet.add(partitionObj.getInt("partitionId"));
+            }
+
+            return partitionSet;
+        } catch (JSONException e) {
+        	// Unable to find partitions
+            return null;
+        }
+        */
     }
 
     @Override

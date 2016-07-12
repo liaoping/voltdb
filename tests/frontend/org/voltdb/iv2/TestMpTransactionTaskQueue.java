@@ -67,6 +67,7 @@ public class TestMpTransactionTaskQueue extends TestCase
     SiteTaskerQueue m_writeQueue;
     MpRoSitePool m_MPpool;
     MpTransactionTaskQueue m_dut;
+    TxnEgo txnId;
 
     @Override
     public void setUp()
@@ -77,6 +78,15 @@ public class TestMpTransactionTaskQueue extends TestCase
         when(m_MPpool.canAcceptWork()).thenReturn(true);
         m_dut = new MpTransactionTaskQueue(m_writeQueue,TxnEgo.makeZero(MpInitiator.MP_INIT_PID).getTxnId());
         m_dut.setMpRoSitePool(m_MPpool);
+        txnId = TxnEgo.makeZero(MpInitiator.MP_INIT_PID);
+    }
+    
+    private long offerTransaction(boolean read, Integer [] sites) {
+    	txnId = txnId.makeNext();
+        long m_txnid = txnId.getTxnId();
+        m_dut.offer(makeTransactionTask(m_txnid, read, generateSiteMap(sites, m_txnid)));
+        System.out.println("Offered " + m_txnid + " " + read);
+        return m_txnid;
     }
 
     // Test cases:
@@ -86,7 +96,6 @@ public class TestMpTransactionTaskQueue extends TestCase
     public void testMultiReads()
     {
         // We'll keep handing reads to the pool until it tells us to stop
-        TxnEgo txnId = TxnEgo.makeZero(MpInitiator.MP_INIT_PID);
         List<Long> activeTxns = new ArrayList<Long>();
         for (int i = 0; i < 100; i++) {
             txnId = txnId.makeNext();
@@ -121,24 +130,19 @@ public class TestMpTransactionTaskQueue extends TestCase
     @Test
     public void testReadWriteBlocking()
     {
-        TxnEgo txnId = TxnEgo.makeZero(MpInitiator.MP_INIT_PID);
         // Offer a bunch of reads and see that they're sent to the pool
         Deque<Long> offeredReads = new ArrayDeque<Long>();
+        Integer [] sites = new Integer [] {1, 2};
         for (int i = 0; i < 10; i++) {
-            txnId = txnId.makeNext();
-            offeredReads.push(txnId.getTxnId());
-            m_dut.offer(makeTransactionTask(txnId.getTxnId(), true, generateSiteMap(new Integer [] {1,2,3}, txnId.getTxnId())));
-            verify(m_MPpool).doWork(eq(txnId.getTxnId()), any(TransactionTask.class));
+        	long m_txnid = offerTransaction(true,sites);
+            offeredReads.push(m_txnid);
+            verify(m_MPpool).doWork(eq(m_txnid), any(TransactionTask.class));
         }
         // Offer a write and verify that it's not yet sent to the write queue
-        txnId = txnId.makeNext();
-        long writetxnid = txnId.getTxnId();
-        m_dut.offer(makeTransactionTask(writetxnid, false, generateSiteMap(new Integer [] {1}, writetxnid)));
+        long writetxnid = offerTransaction(false,sites);
         verify(m_writeQueue, never()).offer(any(TransactionTask.class));
         // Offer another read and verify that it's not sent to the pool
-        txnId = txnId.makeNext();
-        long readtxnid = txnId.getTxnId();
-        m_dut.offer(makeTransactionTask(readtxnid, true, generateSiteMap(new Integer [] {1,3}, readtxnid)));
+        long readtxnid = offerTransaction(true,sites);
         verify(m_MPpool, never()).doWork(eq(readtxnid), any(TransactionTask.class));
         // Now flush the first set of reads, make sure we don't offer the write or read early
         for (int i = 0; i < 10; i++) {
@@ -152,9 +156,7 @@ public class TestMpTransactionTaskQueue extends TestCase
         verify(m_writeQueue).offer(any(TransactionTask.class));
         verify(m_MPpool, never()).doWork(eq(readtxnid), any(TransactionTask.class));
         // add another read, see that it doesn't come out either
-        txnId = txnId.makeNext();
-        long readtxnid2 = txnId.getTxnId();
-        m_dut.offer(makeTransactionTask(readtxnid2, true, generateSiteMap(new Integer [] {1,2,3}, txnId.getTxnId())));
+        long readtxnid2 = offerTransaction(true,sites);
         verify(m_MPpool, never()).doWork(eq(readtxnid2), any(TransactionTask.class));
         // now flush the write and verify that the reads emerge
         m_dut.flush(writetxnid);
@@ -166,29 +168,22 @@ public class TestMpTransactionTaskQueue extends TestCase
     @Test
     public void testReadWriteNoBlocking()
     {
-        TxnEgo txnId = TxnEgo.makeZero(MpInitiator.MP_INIT_PID);
         // Offer a bunch of reads and see that they're sent to the pool
         Deque<Long> offeredReads = new ArrayDeque<Long>();
+        Integer [] sites = new Integer [] {1, 2};
         for (int i = 0; i < 3; i++) {
-            txnId = txnId.makeNext();
-            offeredReads.push(txnId.getTxnId());
-            m_dut.offer(makeTransactionTask(txnId.getTxnId(), true, generateSiteMap(new Integer [] {1,2,5}, txnId.getTxnId())));
-            verify(m_MPpool).doWork(eq(txnId.getTxnId()), any(TransactionTask.class));
+        	long m_txnid = offerTransaction(true,sites);
+            offeredReads.push(m_txnid);
+            verify(m_MPpool).doWork(eq(m_txnid), any(TransactionTask.class));
         }
         // Offer a write and verify that it's not yet sent to the write queue
-        txnId = txnId.makeNext();
-        long writetxnid = txnId.getTxnId();
-        m_dut.offer(makeTransactionTask(writetxnid, false, generateSiteMap(new Integer [] {1}, writetxnid)));
+        long writetxnid = offerTransaction(false,sites);
         verify(m_writeQueue, never()).offer(any(TransactionTask.class));
         // Offer another read and verify that it's not sent to the pool
-        txnId = txnId.makeNext();
-        long readtxnid = txnId.getTxnId();
-        m_dut.offer(makeTransactionTask(readtxnid, true, generateSiteMap(new Integer [] {1,3}, readtxnid)));
+        long readtxnid = offerTransaction(true,sites);
         verify(m_MPpool, never()).doWork(eq(readtxnid), any(TransactionTask.class));
         // Offer a write and verify that it's not yet sent to the write queue (FCFS ordering!)
-        txnId = txnId.makeNext();
-        long writetxnid2 = txnId.getTxnId();
-        m_dut.offer(makeTransactionTask(writetxnid2, false, generateSiteMap(new Integer [] {5}, writetxnid2)));
+        long writetxnid2 = offerTransaction(false,sites);
         verify(m_writeQueue, never()).offer(any(TransactionTask.class));
         // Now flush the first set of reads, make sure we don't offer the writes or read early
         for (int i = 0; i < 3; i++) {
@@ -202,9 +197,7 @@ public class TestMpTransactionTaskQueue extends TestCase
         verify(m_writeQueue).offer(any(TransactionTask.class));
         verify(m_MPpool, never()).doWork(eq(readtxnid), any(TransactionTask.class));
         // add another read, see that it doesn't come out either
-        txnId = txnId.makeNext();
-        long readtxnid2 = txnId.getTxnId();
-        m_dut.offer(makeTransactionTask(readtxnid2, true, generateSiteMap(new Integer [] {1,2,3}, txnId.getTxnId())));
+        long readtxnid2 = offerTransaction(true,sites);
         verify(m_MPpool, never()).doWork(eq(readtxnid2), any(TransactionTask.class));
         // now flush the write and verify that the reads emerge
         m_dut.flush(writetxnid);
@@ -213,5 +206,119 @@ public class TestMpTransactionTaskQueue extends TestCase
         m_dut.flush(readtxnid);
         m_dut.flush(writetxnid2);
         verify(m_MPpool).doWork(eq(readtxnid2), any(TransactionTask.class));
+    }
+    
+    // Reads and Writes can execute concurrently, as long as their sites don't intersect
+    @Test
+    public void testConcurrentReadWrite()
+    {
+        Deque<Long> offeredReads = new ArrayDeque<Long>();
+        Deque<Long> offeredWrites = new ArrayDeque<Long>();
+        Integer [] sitesA = new Integer [] {1, 3};
+        Integer [] sitesB = new Integer [] {2, 4};
+        Integer [] sitesAB = new Integer [] {1, 2, 3, 4};
+        long m_txnid;
+        
+        // R1 Read from SitesA, W1 Write to SitesB, both should succeed
+        m_txnid = offerTransaction(true, sitesA);
+        offeredReads.addLast(m_txnid);
+        verify(m_MPpool).doWork(eq(m_txnid), any(TransactionTask.class));
+        
+        m_txnid = offerTransaction(false, sitesB);
+        offeredWrites.addLast(m_txnid);
+        verify(m_writeQueue).offer(any(TransactionTask.class));
+        
+        // R2 Read from SitesA (should succeed), R3 Read from SitesB (should wait)
+        m_txnid = offerTransaction(true, sitesA);
+        offeredReads.addLast(m_txnid);
+        verify(m_MPpool).doWork(eq(m_txnid), any(TransactionTask.class));
+        
+        m_txnid = offerTransaction(true, sitesB);
+        offeredReads.addLast(m_txnid);
+        verify(m_MPpool, never()).doWork(eq(m_txnid), any(TransactionTask.class));
+        
+        // W2 Write to SitesA, W3 Write to Sites B (should wait)
+        m_txnid = offerTransaction(false, sitesA);
+        offeredWrites.addLast(m_txnid);
+        verify(m_writeQueue).offer(any(TransactionTask.class));
+        
+        m_txnid = offerTransaction(false, sitesB);
+        offeredWrites.addLast(m_txnid);
+        verify(m_writeQueue).offer(any(TransactionTask.class));
+        
+        // R4 Read from SitesA (should wait)
+        m_txnid = offerTransaction(true, sitesA);
+        offeredReads.addLast(m_txnid);
+        verify(m_MPpool, never()).doWork(eq(m_txnid), any(TransactionTask.class));
+        
+        // R5 Read SitesAB (should wait)
+        m_txnid = offerTransaction(true, sitesAB);
+        offeredReads.addLast(m_txnid);
+        verify(m_MPpool, never()).doWork(eq(m_txnid), any(TransactionTask.class));
+        
+        // W4 Write SitesB (should wait)
+        m_txnid = offerTransaction(false, sitesB);
+        offeredWrites.addLast(m_txnid);
+        verify(m_writeQueue).offer(any(TransactionTask.class));
+        
+        // R6 Read SitesA (should wait)
+        m_txnid = offerTransaction(true, sitesA);
+        offeredReads.addLast(m_txnid);
+        verify(m_MPpool, never()).doWork(eq(m_txnid), any(TransactionTask.class));
+        
+        // Flush R1, W1, R2: R3, W2 should continue, all others should wait
+        m_txnid = offeredReads.removeFirst();
+        System.out.println("Flushing " + m_txnid);
+        m_dut.flush(m_txnid);
+        verify(m_MPpool).completeWork(m_txnid);
+        
+        m_txnid = offeredReads.removeFirst();
+        m_dut.flush(m_txnid);
+        verify(m_MPpool).completeWork(m_txnid);
+        
+        m_txnid = offeredWrites.removeFirst();
+        System.out.println("Flushing " + m_txnid);
+        m_dut.flush(m_txnid);
+        
+        verify(m_MPpool).doWork(eq(offeredReads.peekFirst()), any(TransactionTask.class));
+        verify(m_writeQueue, times(2)).offer(any(TransactionTask.class));
+        
+        // Flush R3: W3 should continue, others should wait
+        
+        m_txnid = offeredReads.removeFirst();
+        m_dut.flush(m_txnid);
+        verify(m_MPpool).completeWork(m_txnid);
+        
+        verify(m_writeQueue, times(3)).offer(any(TransactionTask.class));
+        
+        // Flush W2: R4 should continue
+        
+        m_txnid = offeredWrites.removeFirst();
+        m_dut.flush(m_txnid);
+        
+        verify(m_MPpool).doWork(eq(offeredReads.peekFirst()), any(TransactionTask.class));
+        
+        // Flush W3: R5 should continue
+        
+        m_txnid = offeredWrites.removeFirst();
+        m_dut.flush(m_txnid);
+        
+        verify(m_MPpool).doWork(eq(offeredReads.peekFirst()), any(TransactionTask.class));
+        
+        // Flush R4, R5: W4, R6 should continue
+        
+        m_txnid = offeredReads.removeFirst();
+        m_dut.flush(m_txnid);
+        verify(m_MPpool).completeWork(m_txnid);
+        
+        verify(m_MPpool).doWork(eq(offeredReads.peekFirst()), any(TransactionTask.class));
+        
+        m_txnid = offeredReads.removeFirst();
+        m_dut.flush(m_txnid);
+        verify(m_MPpool).completeWork(m_txnid);
+        
+        verify(m_MPpool).doWork(eq(offeredReads.peekFirst()), any(TransactionTask.class));
+        verify(m_writeQueue, times(4)).offer(any(TransactionTask.class));
+
     }
 }
