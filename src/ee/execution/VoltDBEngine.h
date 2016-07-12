@@ -304,6 +304,7 @@ class __attribute__((visibility("default"))) VoltDBEngine {
 
         void releaseUndoToken(int64_t undoToken)
         {
+            std::cout << "P" << m_executorContext->m_partitionId << " releaseUndoToken called with currentUniqueId set to " << m_executorContext->currentUniqueId() << std::endl;
             if (m_currentUndoQuantum != NULL && m_currentUndoQuantum->getUndoToken() == undoToken) {
                 m_currentUndoQuantum = NULL;
                 m_executorContext->setupForPlanFragments(NULL);
@@ -320,6 +321,7 @@ class __attribute__((visibility("default"))) VoltDBEngine {
 
         void undoUndoToken(int64_t undoToken)
         {
+            std::cout << "P" << m_executorContext->m_partitionId << " releaseUndoToken called with currentUniqueId set to " << m_executorContext->currentUniqueId() << std::endl;
             m_currentUndoQuantum = NULL;
             m_executorContext->setupForPlanFragments(NULL);
             m_undoLog.undo(undoToken);

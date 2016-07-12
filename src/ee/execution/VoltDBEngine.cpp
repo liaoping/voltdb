@@ -460,6 +460,7 @@ int VoltDBEngine::executePlanFragment(int64_t planfragmentId,
     size_t numResultDependenciesCountOffset = m_resultOutput.reserveBytes(4);
 
     // configure the execution context.
+    std::cout << "P" << m_partitionId << " setupForPlanFragments called with uniqueId " << uniqueId << std::endl;
     m_executorContext->setupForPlanFragments(getCurrentUndoQuantum(),
                                              txnId,
                                              spHandle,
@@ -1118,6 +1119,7 @@ VoltDBEngine::loadTable(int32_t tableId,
     //The spHandle and lastCommittedSpHandle aren't really used in load table
     //since their only purpose as of writing this (1/2013) they are only used
     //for export data and we don't technically support loading into an export table
+    std::cout << "P" << m_partitionId << " setupForPlanFragments called with uniqueId " << uniqueId << std::endl;
     m_executorContext->setupForPlanFragments(getCurrentUndoQuantum(),
                                              txnId,
                                              spHandle,
@@ -1913,6 +1915,7 @@ int64_t VoltDBEngine::applyBinaryLog(int64_t txnId,
                                   const char *log) {
     DRTupleStreamDisableGuard guard(m_executorContext, !m_isActiveActiveDREnabled);
     setUndoToken(undoToken);
+    std::cout << "P" << m_partitionId << " setupForPlanFragments called with uniqueId " << uniqueId << std::endl;
     m_executorContext->setupForPlanFragments(getCurrentUndoQuantum(),
                                              txnId,
                                              spHandle,

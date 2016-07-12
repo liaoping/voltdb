@@ -1072,14 +1072,14 @@ public class Site implements Runnable, SiteProcedureConnection, SiteSnapshotConn
         //If the begin undo token is not set the txn never did any work so there is nothing to undo/release
         if (beginUndoToken == Site.kInvalidUndoToken) return;
         if (rollback) {
-            drLog.info("SP site P" + m_partitionId + " EE undoUndoToken called");
+            //drLog.info("SP site P" + m_partitionId + " EE undoUndoToken called");
             m_ee.undoUndoToken(beginUndoToken);
         }
         else {
             assert(m_latestUndoToken != Site.kInvalidUndoToken);
             assert(m_latestUndoToken >= beginUndoToken);
             if (m_latestUndoToken > beginUndoToken) {
-                drLog.info("SP site P" + m_partitionId + " EE releaseUndoToken called");
+                //drLog.info("SP site P" + m_partitionId + " EE releaseUndoToken called");
                 m_ee.releaseUndoToken(m_latestUndoToken);
             }
         }
@@ -1378,8 +1378,8 @@ public class Site implements Runnable, SiteProcedureConnection, SiteSnapshotConn
                                             boolean readOnly)
             throws EEException
     {
-        drLog.info("SP site P" + m_partitionId + " EE executePlanFragments called with txnId " + txnId + " spHandle " + spHandle +
-                      " lastCommittedSpHandle " + m_lastCommittedSpHandle + " uniqueId " + uniqueId);
+        //drLog.info("SP site P" + m_partitionId + " EE executePlanFragments called with txnId " + txnId + " spHandle " + spHandle +
+        //              " lastCommittedSpHandle " + m_lastCommittedSpHandle + " uniqueId " + uniqueId);
         return m_ee.executePlanFragments(
                 numFragmentIds,
                 planFragmentIds,
