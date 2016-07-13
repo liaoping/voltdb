@@ -1388,6 +1388,7 @@ public final class InvocationDispatcher {
         // HSQL (or PostgreSQL) does not specifically implement AdHoc SP
         // -- instead, use its always-SP implementation of AdHoc
         boolean isSinglePartition = plannedStmtBatch.isSinglePartitionCompatible() || m_isConfiguredForNonVoltDBBackend;
+        boolean isNPartition = plannedStmtBatch.isSinglePartitionCompatible();
         int partition = -1;
 
         if (isSinglePartition) {
@@ -1409,10 +1410,21 @@ public final class InvocationDispatcher {
                 param = VoltType.valueToBytes(partitionParam);
             }
             partition = TheHashinator.getPartitionForParameter(type, partitionParam);
+            
+            System.out.println("Invoking SP: partition: " + partition + ", param: " + partitionParam.toString() + ", type: " + type);
 
             // Send the partitioning parameter and its type along so that the site can check if
             // it's mis-partitioned. Type is needed to re-hashinate for command log re-init.
             task.setParams(param, (byte)type, buf.array());
+        }
+        else if (isNPartition) {
+            if (plannedStmtBatch.isReadOnly()) {
+                task.procName = "@AdHoc_RO_NP";
+            }
+            else {
+                task.procName = "@AdHoc_RW_NP";
+            }
+            task.setParams(buf.array());   	
         }
         else {
             if (plannedStmtBatch.isReadOnly()) {

@@ -24,8 +24,6 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
-import java.util.Set;
-
 import org.voltcore.logging.VoltLogger;
 import org.voltdb.CatalogContext;
 import org.voltdb.CatalogSpecificPlanner;
@@ -55,6 +53,7 @@ public class MpTransactionTaskQueue extends TransactionTaskQueue
     private final HashMultimap<Integer, Long> m_currentReadSites = HashMultimap.create();
 
     private MpRoSitePool m_sitePool = null;
+    private MpUpdateSitePool m_updateSitePool = null;
 
     MpTransactionTaskQueue(SiteTaskerQueue queue, long initialTnxId)
     {
@@ -66,15 +65,24 @@ public class MpTransactionTaskQueue extends TransactionTaskQueue
         m_sitePool = sitePool;
     }
 
+    void setMpUpdateSitePool(MpUpdateSitePool sitePool)
+    {
+        m_updateSitePool = sitePool;
+    }
+    
     synchronized void updateCatalog(String diffCmds, CatalogContext context, CatalogSpecificPlanner csp)
     {
         m_sitePool.updateCatalog(diffCmds, context, csp);
+        m_updateSitePool.updateCatalog(diffCmds, context, csp);
     }
 
     void shutdown()
     {
         if (m_sitePool != null) {
             m_sitePool.shutdown();
+        }
+        if (m_updateSitePool != null) {
+            m_updateSitePool.shutdown();
         }
     }
 
@@ -94,6 +102,7 @@ public class MpTransactionTaskQueue extends TransactionTaskQueue
         return true;
     }
 
+    // XXX Fixme for N part txns...may have both MP reads and writes concurrently
     // repair is used by MPI repair to inject a repair task into the
     // SiteTaskerQueue.  Before it does this, it unblocks the MP transaction
     // that may be running in the Site thread and causes it to rollback by
@@ -163,11 +172,19 @@ public class MpTransactionTaskQueue extends TransactionTaskQueue
     private void taskQueueOffer(TransactionTask task)
     {
         Iv2Trace.logSiteTaskerQueueOffer(task);
+        //if (task.getTransactionState().isReadOnly() || task.getTransactionState().getInvocation().getProcName().startsWith("@AdHoc")) {
+
         if (task.getTransactionState().isReadOnly()) {
             m_sitePool.doWork(task.getTxnId(), task);
         }
         else {
-            m_taskQueue.offer(task);
+        	// FIXME for Npart hack
+        	if(task.getTransactionState().getInvocation() != null &&
+        			task.getTransactionState().getInvocation().getProcName().startsWith("@AdHoc")) {
+                m_updateSitePool.doWork(task.getTxnId(), task);
+        	} else {
+        		m_taskQueue.offer(task);
+        	}
         }
     }
     
@@ -216,7 +233,7 @@ public class MpTransactionTaskQueue extends TransactionTaskQueue
             }
             
             while (task != null &&
-            		((!task.getTransactionState().isReadOnly() && !hasReadSiteConflicts(task) && !hasWriteSiteConflicts(task)) ||
+            		((!task.getTransactionState().isReadOnly() && !hasReadSiteConflicts(task) && !hasWriteSiteConflicts(task) && m_updateSitePool.canAcceptWork()) ||
             		(task.getTransactionState().isReadOnly() && !hasWriteSiteConflicts(task) && m_sitePool.canAcceptWork()))
             		) {
             	task = m_backlog.pollFirst();
@@ -256,6 +273,13 @@ public class MpTransactionTaskQueue extends TransactionTaskQueue
                 task = m_backlog.peekFirst();
             
             }
+            if (task != null) {
+            	System.out.println("Task " + task.getTxnId() 
+            	+ " failed b/c ROconflict" + hasReadSiteConflicts(task) 
+            	+ " Wrconflict " + hasWriteSiteConflicts(task)
+            	+ " UpdateSiteCanWork " + m_updateSitePool.canAcceptWork());
+            }
+            
         }
         return retval;
     }
@@ -293,7 +317,9 @@ public class MpTransactionTaskQueue extends TransactionTaskQueue
             	System.out.println("Removed Write sites: " + m_currentWriteSites);
             }
             m_currentWrites.remove(txnId);
-            assert(m_currentWrites.isEmpty());
+            //assert(m_currentWrites.isEmpty());
+            // FIXME: Only call for sites sent to the pool
+            m_updateSitePool.completeWork(txnId);
         }
         if (taskQueueOffer()) {
             ++offered;

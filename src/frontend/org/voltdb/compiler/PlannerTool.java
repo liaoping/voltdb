@@ -179,6 +179,7 @@ public class PlannerTool {
                 AdHocPlannedStatement cachedPlan = m_cache.getWithSQL(sqlIn);
                 if (cachedPlan != null) {
                     cacheUse = CacheUse.HIT1;
+                    System.out.println("SQL: " + cachedPlan.sql.toString() + "\nPlan: " + cachedPlan.toString());
                     return cachedPlan;
                 }
                 else {
@@ -257,6 +258,7 @@ public class PlannerTool {
                             // parameterized plan from the cache does not have exception
                             m_cache.put(sql, parsedToken, ahps, extractedLiterals, hasUserQuestionMark, false);
                             cacheUse = CacheUse.HIT2;
+                            System.out.println("SQL: " + ahps.sql.toString() + "\nPlan: " + ahps.toString());
                             return ahps;
                         }
                     }
@@ -308,6 +310,7 @@ public class PlannerTool {
                 // Again, plans with inferred partitioning are the only ones supported in the cache.
                 m_cache.put(sqlIn, parsedToken, ahps, extractedLiterals, hasUserQuestionMark, planner.wasBadPameterized());
             }
+            System.out.println("SQL: " + ahps.sql.toString() + "\nPlan: " + ahps.toString());
             return ahps;
         }
         finally {

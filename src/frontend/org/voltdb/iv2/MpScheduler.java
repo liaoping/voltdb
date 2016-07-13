@@ -97,6 +97,11 @@ public class MpScheduler extends Scheduler
         m_pendingTasks.setMpRoSitePool(sitePool);
     }
 
+    void setMpUpdateSitePool(MpUpdateSitePool updateSitePool)
+    {
+        m_pendingTasks.setMpUpdateSitePool(updateSitePool);
+    }
+    
     void updateCatalog(String diffCmds, CatalogContext context, CatalogSpecificPlanner csp)
     {
         m_pendingTasks.updateCatalog(diffCmds, context, csp);
@@ -302,10 +307,12 @@ public class MpScheduler extends Scheduler
         if (NpProcedureTaskConstructor != null) {
         	Set<Integer> involvedPartitions = null;
         	if (isNpTxn(message)) {
-        		involvedPartitions = getBalancePartitions(message);
-        	} else {
-        		// Generic multi-partition transaction, see if the planner provided a subset of partitions
-        		involvedPartitions = getInvolvedPartitions(message);
+        		if (message.getStoredProcedureName().equalsIgnoreCase("@BalancePartitions")) {
+        			involvedPartitions = getBalancePartitions(message);
+        		} else {
+        			// Generic multi-partition transaction, see if the planner provided a subset of partitions
+        			involvedPartitions = getInvolvedPartitions(message);
+        		}
         	}
             if (involvedPartitions != null) {
                 HashMap<Integer, Long> involvedPartitionMasters = Maps.newHashMap(m_partitionMasters);
@@ -337,7 +344,9 @@ public class MpScheduler extends Scheduler
     private boolean isNpTxn(Iv2InitiateTaskMessage msg)
     {
         return msg.getStoredProcedureName().startsWith("@") &&
-                msg.getStoredProcedureName().equalsIgnoreCase("@BalancePartitions") &&
+                (msg.getStoredProcedureName().equalsIgnoreCase("@BalancePartitions") ||
+                msg.getStoredProcedureName().equalsIgnoreCase("@AdHoc_RO_NP") ||
+                msg.getStoredProcedureName().equalsIgnoreCase("@AdHoc_RW_NP")) &&
                 (byte) msg.getParameters()[1] != 1; // clearIndex is MP, normal rebalance is NP
     }
 
@@ -363,8 +372,6 @@ public class MpScheduler extends Scheduler
      */
     private Set<Integer> getInvolvedPartitions(Iv2InitiateTaskMessage msg)
     {
-    	return null;
-    	/*
         try {
             JSONObject jsObj = new JSONObject(msg.getParameters()[0]);
             JSONArray partitionArray = jsObj.getJSONArray("partitionIds");
@@ -372,7 +379,7 @@ public class MpScheduler extends Scheduler
 
             for (int i = 0; i < partitionArray.length(); i++) {
                 JSONObject partitionObj = partitionArray.getJSONObject(i);
-                partitionSet.add(partitionObj.getInt("partitionId"));
+                partitionSet.add(partitionObj.getInt("ID"));
             }
 
             return partitionSet;
@@ -380,7 +387,6 @@ public class MpScheduler extends Scheduler
         	// Unable to find partitions
             return null;
         }
-        */
     }
 
     @Override
