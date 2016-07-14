@@ -97,10 +97,12 @@ public class MpScheduler extends Scheduler
         m_pendingTasks.setMpRoSitePool(sitePool);
     }
 
+    /*
     void setMpUpdateSitePool(MpUpdateSitePool updateSitePool)
     {
         m_pendingTasks.setMpUpdateSitePool(updateSitePool);
     }
+    */
     
     void updateCatalog(String diffCmds, CatalogContext context, CatalogSpecificPlanner csp)
     {

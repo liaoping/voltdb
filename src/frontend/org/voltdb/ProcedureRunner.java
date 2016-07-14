@@ -294,14 +294,14 @@ public class ProcedureRunner {
                 paramList = combinedParams;
             }
 
+            System.out.println("ParamList: ");
+            for (int i=0; i < paramList.length; ++i) {
+              System.out.println(paramList[i]);
+            }
             if (paramList.length != m_paramTypes.length) {
                 m_statsCollector.endProcedure(false, true, null, null);
                 String msg = "PROCEDURE " + m_procedureName + " EXPECTS " + String.valueOf(m_paramTypes.length) +
                     " PARAMS, BUT RECEIVED " + String.valueOf(paramList.length);
-                System.out.println("ParamList: ");
-                for (int i=0; i < paramList.length; ++i) {
-                	System.out.println(paramList[i]);
-                }
                 m_statusCode = ClientResponse.GRACEFUL_FAILURE;
                 return getErrorResponse(m_statusCode, msg, null);
             }

@@ -358,6 +358,9 @@ public final class InvocationDispatcher {
             else if ("@AdHoc".equals(task.procName)) {
                 return dispatchAdHoc(task, handler, ccxn, false, user);
             }
+            else if ("@AdHoc_NP".equals(task.procName)) {
+                return dispatchAdHocNp(task, handler, ccxn, false, user);
+            }
             else if ("@AdHocSpForTest".equals(task.procName)) {
                 return dispatchAdHocSpForTest(task, handler, ccxn, false, user);
             }
@@ -812,6 +815,22 @@ public final class InvocationDispatcher {
             sendSentinel(txnId, initiatorHSId, -1, -1, true);
         }
     }
+
+    private final ClientResponseImpl dispatchAdHocNp(StoredProcedureInvocation task,
+            InvocationClientHandler handler, Connection ccxn, boolean isExplain, AuthSystem.AuthUser user) {
+        ParameterSet params = task.getParams();
+        assert(params.size() > 1);
+        Object[] paramArray = params.toArray();
+        String sql = (String) paramArray[0];
+        // get the partition params which must exist
+        Object[] userPartitionKey = Arrays.copyOfRange(paramArray, 1, 2);
+        Object[] userParams = null;
+        System.out.println("Np dispatch: " + userPartitionKey.toString());
+        ExplainMode explainMode = isExplain ? ExplainMode.EXPLAIN_ADHOC : ExplainMode.NONE;
+        dispatchAdHocCommon(task, handler, ccxn, explainMode, sql, userParams, userPartitionKey, user);
+        return null;
+    }
+
 
     private final ClientResponseImpl dispatchAdHocSpForTest(StoredProcedureInvocation task,
             InvocationClientHandler handler, Connection ccxn, boolean isExplain, AuthSystem.AuthUser user) {
