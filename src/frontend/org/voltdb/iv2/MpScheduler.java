@@ -27,7 +27,6 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
 
-import org.json_voltpatches.JSONArray;
 import org.json_voltpatches.JSONException;
 import org.json_voltpatches.JSONObject;
 import org.voltcore.logging.VoltLogger;
@@ -37,6 +36,7 @@ import org.voltcore.messaging.VoltMessage;
 import org.voltdb.CatalogContext;
 import org.voltdb.CatalogSpecificPlanner;
 import org.voltdb.CommandLog;
+import org.voltdb.ParameterConverter;
 import org.voltdb.SystemProcedureCatalog;
 import org.voltdb.SystemProcedureCatalog.Config;
 import org.voltdb.VoltDB;
@@ -48,8 +48,8 @@ import org.voltdb.messaging.FragmentTaskMessage;
 import org.voltdb.messaging.InitiateResponseMessage;
 import org.voltdb.messaging.Iv2EndOfLogMessage;
 import org.voltdb.messaging.Iv2InitiateTaskMessage;
+import org.voltdb.sysprocs.AdHocNPPartitions;
 import org.voltdb.sysprocs.BalancePartitionsRequest;
-import org.voltdb.sysprocs.BalancePartitionsRequest.PartitionPair;
 import org.voltdb.utils.MiscUtils;
 
 import com.google_voltpatches.common.collect.Maps;
@@ -306,6 +306,7 @@ public class MpScheduler extends Scheduler
                     message.isForReplay());
         // Multi-partition initiation (at the MPI)
         MpProcedureTask task = null;
+        System.out.println(message.getParameters().toString());
         if (NpProcedureTaskConstructor != null) {
         	Set<Integer> involvedPartitions = null;
         	if (isNpTxn(message)) {
@@ -346,10 +347,10 @@ public class MpScheduler extends Scheduler
     private boolean isNpTxn(Iv2InitiateTaskMessage msg)
     {
         return msg.getStoredProcedureName().startsWith("@") &&
-                (msg.getStoredProcedureName().equalsIgnoreCase("@BalancePartitions") ||
+                ((msg.getStoredProcedureName().equalsIgnoreCase("@BalancePartitions") &&
+                        (byte) msg.getParameters()[1] != 1) ||
                 msg.getStoredProcedureName().equalsIgnoreCase("@AdHoc_RO_NP") ||
-                msg.getStoredProcedureName().equalsIgnoreCase("@AdHoc_RW_NP")) &&
-                (byte) msg.getParameters()[1] != 1; // clearIndex is MP, normal rebalance is NP
+                msg.getStoredProcedureName().equalsIgnoreCase("@AdHoc_RW_NP")) ; // clearIndex is MP, normal rebalance is NP
     }
 
     /**
@@ -374,19 +375,18 @@ public class MpScheduler extends Scheduler
      */
     private Set<Integer> getInvolvedPartitions(Iv2InitiateTaskMessage msg)
     {
+    	System.out.println("getInvolvedPartitions");
+    	Object param = ParameterConverter.tryToMakeCompatible(String.class, msg.getParameters()[0]);
         try {
-            JSONObject jsObj = new JSONObject(msg.getParameters()[0]);
-            JSONArray partitionArray = jsObj.getJSONArray("partitionIds");
-            Set<Integer> partitionSet = Sets.newHashSet();
+            JSONObject jsObj = new JSONObject((String) param);
+            AdHocNPPartitions request = new AdHocNPPartitions(jsObj);
+            Set<Integer> partitionSet = Sets.newHashSet(request.partitions);
 
-            for (int i = 0; i < partitionArray.length(); i++) {
-                JSONObject partitionObj = partitionArray.getJSONObject(i);
-                partitionSet.add(partitionObj.getInt("ID"));
-            }
-
+            System.out.println("Found partitionSet: " + partitionSet.toString());
             return partitionSet;
         } catch (JSONException e) {
         	// Unable to find partitions
+        	System.out.println("Unable to find NP partitions! " + e);
             return null;
         }
     }

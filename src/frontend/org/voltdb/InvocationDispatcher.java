@@ -78,6 +78,7 @@ import org.voltdb.jni.ExecutionEngine;
 import org.voltdb.messaging.Iv2InitiateTaskMessage;
 import org.voltdb.messaging.MultiPartitionParticipantMessage;
 import org.voltdb.parser.SQLLexer;
+import org.voltdb.sysprocs.AdHocNPPartitions;
 import org.voltdb.sysprocs.saverestore.SnapshotUtil;
 import org.voltdb.utils.Encoder;
 import org.voltdb.utils.MiscUtils;
@@ -823,8 +824,14 @@ public final class InvocationDispatcher {
         Object[] paramArray = params.toArray();
         String sql = (String) paramArray[0];
         // get the partition params which must exist
-        Object[] userPartitionKey = Arrays.copyOfRange(paramArray, 1, 2);
+        String partitionString = (String) Arrays.copyOfRange(paramArray, 1, 2)[0];
+        AdHocNPPartitions partitions = new AdHocNPPartitions(partitionString);
+        Object[] userPartitionKey = new Object[1];
+        userPartitionKey[0] = partitions.toJSONString();
         Object[] userParams = null;
+        if (params.size() > 2) {
+            userParams = Arrays.copyOfRange(paramArray, 2, paramArray.length);
+        }
         System.out.println("Np dispatch: " + userPartitionKey.toString());
         ExplainMode explainMode = isExplain ? ExplainMode.EXPLAIN_ADHOC : ExplainMode.NONE;
         dispatchAdHocCommon(task, handler, ccxn, explainMode, sql, userParams, userPartitionKey, user);
@@ -1406,11 +1413,26 @@ public final class InvocationDispatcher {
         // pick the sysproc based on the presence of partition info
         // HSQL (or PostgreSQL) does not specifically implement AdHoc SP
         // -- instead, use its always-SP implementation of AdHoc
-        boolean isSinglePartition = plannedStmtBatch.isSinglePartitionCompatible() || m_isConfiguredForNonVoltDBBackend;
-        boolean isNPartition = plannedStmtBatch.isSinglePartitionCompatible();
+        
+        boolean isNPartition = plannedStmtBatch.work.invocationName.equalsIgnoreCase("@AdHoc_NP");
+        boolean isSinglePartition = !isNPartition && (plannedStmtBatch.isSinglePartitionCompatible() || m_isConfiguredForNonVoltDBBackend);
         int partition = -1;
-
-        if (isSinglePartition) {
+        
+        if (isNPartition) {
+        	System.out.println("Create AdHocNP txn");
+            if (plannedStmtBatch.isReadOnly()) {
+                task.procName = "@AdHoc_RO_NP";
+            }
+            else {
+                task.procName = "@AdHoc_RW_NP";
+            }
+            Object partitionParam = plannedStmtBatch.partitionParam();
+            byte[] param = VoltType.valueToBytes(partitionParam);
+            
+            // explicitly sent partition ids to run transaction on
+            task.setParams(param, buf.array());   	
+        }
+        else if (isSinglePartition) {
             if (plannedStmtBatch.isReadOnly()) {
                 task.procName = "@AdHoc_RO_SP";
             }
@@ -1435,15 +1457,6 @@ public final class InvocationDispatcher {
             // Send the partitioning parameter and its type along so that the site can check if
             // it's mis-partitioned. Type is needed to re-hashinate for command log re-init.
             task.setParams(param, (byte)type, buf.array());
-        }
-        else if (isNPartition) {
-            if (plannedStmtBatch.isReadOnly()) {
-                task.procName = "@AdHoc_RO_NP";
-            }
-            else {
-                task.procName = "@AdHoc_RW_NP";
-            }
-            task.setParams(buf.array());   	
         }
         else {
             if (plannedStmtBatch.isReadOnly()) {
