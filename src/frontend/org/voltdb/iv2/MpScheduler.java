@@ -97,12 +97,12 @@ public class MpScheduler extends Scheduler
         m_pendingTasks.setMpRoSitePool(sitePool);
     }
 
-    /*
+    
     void setMpUpdateSitePool(MpUpdateSitePool updateSitePool)
     {
         m_pendingTasks.setMpUpdateSitePool(updateSitePool);
     }
-    */
+    
     
     void updateCatalog(String diffCmds, CatalogContext context, CatalogSpecificPlanner csp)
     {
@@ -306,7 +306,6 @@ public class MpScheduler extends Scheduler
                     message.isForReplay());
         // Multi-partition initiation (at the MPI)
         MpProcedureTask task = null;
-        System.out.println(message.getParameters().toString());
         if (NpProcedureTaskConstructor != null) {
         	Set<Integer> involvedPartitions = null;
         	if (isNpTxn(message)) {
@@ -375,14 +374,13 @@ public class MpScheduler extends Scheduler
      */
     private Set<Integer> getInvolvedPartitions(Iv2InitiateTaskMessage msg)
     {
-    	System.out.println("getInvolvedPartitions");
+
     	Object param = ParameterConverter.tryToMakeCompatible(String.class, msg.getParameters()[0]);
         try {
             JSONObject jsObj = new JSONObject((String) param);
             AdHocNPPartitions request = new AdHocNPPartitions(jsObj);
             Set<Integer> partitionSet = Sets.newHashSet(request.partitions);
 
-            System.out.println("Found partitionSet: " + partitionSet.toString());
             return partitionSet;
         } catch (JSONException e) {
         	// Unable to find partitions

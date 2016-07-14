@@ -824,15 +824,22 @@ public final class InvocationDispatcher {
         Object[] paramArray = params.toArray();
         String sql = (String) paramArray[0];
         // get the partition params which must exist
-        String partitionString = (String) Arrays.copyOfRange(paramArray, 1, 2)[0];
-        AdHocNPPartitions partitions = new AdHocNPPartitions(partitionString);
+        JSONObject jsObj;
+        String userPartitions = "";
+		try {
+			jsObj = new JSONObject((String) Arrays.copyOfRange(paramArray, 1, 2)[0]);
+			AdHocNPPartitions partitions = new AdHocNPPartitions(jsObj,true);
+			userPartitions = partitions.toJSONString();
+		} catch (JSONException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
         Object[] userPartitionKey = new Object[1];
-        userPartitionKey[0] = partitions.toJSONString();
+        userPartitionKey[0] = userPartitions;
         Object[] userParams = null;
         if (params.size() > 2) {
             userParams = Arrays.copyOfRange(paramArray, 2, paramArray.length);
         }
-        System.out.println("Np dispatch: " + userPartitionKey.toString());
         ExplainMode explainMode = isExplain ? ExplainMode.EXPLAIN_ADHOC : ExplainMode.NONE;
         dispatchAdHocCommon(task, handler, ccxn, explainMode, sql, userParams, userPartitionKey, user);
         return null;
@@ -1419,15 +1426,24 @@ public final class InvocationDispatcher {
         int partition = -1;
         
         if (isNPartition) {
-        	System.out.println("Create AdHocNP txn");
             if (plannedStmtBatch.isReadOnly()) {
                 task.procName = "@AdHoc_RO_NP";
             }
             else {
                 task.procName = "@AdHoc_RW_NP";
             }
-            Object partitionParam = plannedStmtBatch.partitionParam();
-            byte[] param = VoltType.valueToBytes(partitionParam);
+            Object partParam = (String) plannedStmtBatch.partitionParam();
+            byte[] param = VoltType.valueToBytes(partParam);
+            /*
+            byte[] param = null;
+            try {
+				JSONObject jsObj = new JSONObject((String) plannedStmtBatch.partitionParam());
+	            AdHocNPPartitions parts = new AdHocNPPartitions(jsObj,true);
+	            param = VoltType.valueToBytes(parts.toJSONString());
+			} catch (JSONException e) {
+				e.printStackTrace();
+			}
+			*/
             
             // explicitly sent partition ids to run transaction on
             task.setParams(param, buf.array());   	
@@ -1451,9 +1467,7 @@ public final class InvocationDispatcher {
                 param = VoltType.valueToBytes(partitionParam);
             }
             partition = TheHashinator.getPartitionForParameter(type, partitionParam);
-            
-            System.out.println("Invoking SP: partition: " + partition + ", param: " + partitionParam.toString() + ", type: " + type);
-
+        
             // Send the partitioning parameter and its type along so that the site can check if
             // it's mis-partitioned. Type is needed to re-hashinate for command log re-init.
             task.setParams(param, (byte)type, buf.array());

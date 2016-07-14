@@ -53,7 +53,7 @@ public class MpTransactionTaskQueue extends TransactionTaskQueue
     private final HashMultimap<Integer, Long> m_currentReadSites = HashMultimap.create();
 
     private MpRoSitePool m_sitePool = null;
-    //private MpUpdateSitePool m_updateSitePool = null;
+    private MpUpdateSitePool m_updateSitePool = null;
 
     MpTransactionTaskQueue(SiteTaskerQueue queue, long initialTnxId)
     {
@@ -64,18 +64,16 @@ public class MpTransactionTaskQueue extends TransactionTaskQueue
     {
         m_sitePool = sitePool;
     }
-
-    /*
+    
     void setMpUpdateSitePool(MpUpdateSitePool sitePool)
     {
         m_updateSitePool = sitePool;
     }
-    */
     
     synchronized void updateCatalog(String diffCmds, CatalogContext context, CatalogSpecificPlanner csp)
     {
         m_sitePool.updateCatalog(diffCmds, context, csp);
-        //m_updateSitePool.updateCatalog(diffCmds, context, csp);
+        m_updateSitePool.updateCatalog(diffCmds, context, csp);
     }
 
     void shutdown()
@@ -83,11 +81,11 @@ public class MpTransactionTaskQueue extends TransactionTaskQueue
         if (m_sitePool != null) {
             m_sitePool.shutdown();
         }
-        /*
+        
         if (m_updateSitePool != null) {
             m_updateSitePool.shutdown();
         }
-        */
+        
     }
 
     /**
@@ -185,8 +183,7 @@ public class MpTransactionTaskQueue extends TransactionTaskQueue
         	// FIXME for Npart hack
         	if(task.getTransactionState().getInvocation() != null &&
         			task.getTransactionState().getInvocation().getProcName().equals("@AdHoc_NP")) {
-                //m_updateSitePool.doWork(task.getTxnId(), task);
-        		m_taskQueue.offer(task);
+                m_updateSitePool.doWork(task.getTxnId(), task);
         	} else {
         		m_taskQueue.offer(task);
         	}
@@ -238,8 +235,8 @@ public class MpTransactionTaskQueue extends TransactionTaskQueue
             }
             
             while (task != null &&
-            		((!task.getTransactionState().isReadOnly() && !hasReadSiteConflicts(task) && !hasWriteSiteConflicts(task)) ||
-            		//((!task.getTransactionState().isReadOnly() && !hasReadSiteConflicts(task) && !hasWriteSiteConflicts(task) && m_updateSitePool.canAcceptWork()) ||
+            		//((!task.getTransactionState().isReadOnly() && !hasReadSiteConflicts(task) && !hasWriteSiteConflicts(task)) ||
+            		((!task.getTransactionState().isReadOnly() && !hasReadSiteConflicts(task) && !hasWriteSiteConflicts(task) && m_updateSitePool.canAcceptWork()) ||
             		(task.getTransactionState().isReadOnly() && !hasWriteSiteConflicts(task) && m_sitePool.canAcceptWork()))
             		) {
             	task = m_backlog.pollFirst();
@@ -319,7 +316,7 @@ public class MpTransactionTaskQueue extends TransactionTaskQueue
             m_currentWrites.remove(txnId);
             //assert(m_currentWrites.isEmpty());
             // FIXME: Only call for sites sent to the pool
-            //m_updateSitePool.completeWork(txnId);
+            m_updateSitePool.completeWork(txnId);
         }
         if (taskQueueOffer()) {
             ++offered;

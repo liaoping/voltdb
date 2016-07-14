@@ -375,14 +375,11 @@ public class AsyncCompilerAgent {
 
         for (final String sqlStatement : work.sqlStatements) {
             if (inferSP) {
-            	System.out.println("Infer");
                 partitioning = StatementPartitioning.inferPartitioning();
             }
             else if (work.userPartitionKey == null || work.invocationName.equalsIgnoreCase("@AdHoc_NP")) {
-            	System.out.println("ForceMP");
                 partitioning = StatementPartitioning.forceMP();
             } else {
-            	System.out.println("ForceSP");
                 partitioning = StatementPartitioning.forceSP();
             }
             try {

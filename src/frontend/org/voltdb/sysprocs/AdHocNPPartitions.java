@@ -18,44 +18,66 @@
 package org.voltdb.sysprocs;
 
 import com.google_voltpatches.common.collect.ImmutableList;
+import com.google_voltpatches.common.collect.ImmutableSet;
+
 import org.json_voltpatches.JSONArray;
 import org.json_voltpatches.JSONException;
 import org.json_voltpatches.JSONObject;
 import org.json_voltpatches.JSONString;
 import org.json_voltpatches.JSONStringer;
+import org.voltdb.TheHashinator;
+import org.voltdb.VoltType;
 
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
+import java.util.Set;
 
 public class AdHocNPPartitions implements JSONString {
 
-    public final List<Integer> partitions;
+    public final Set<Integer> partitions;
 
     public AdHocNPPartitions(Collection<Integer> partitions)
     {
-        this.partitions = ImmutableList.copyOf(partitions);
+        this.partitions = ImmutableSet.copyOf(partitions);
     }
     
     public AdHocNPPartitions(String partitionString)
     {
-    	ImmutableList.Builder<Integer> builder = ImmutableList.builder();
+    	ImmutableSet.Builder<Integer> builder = ImmutableSet.builder();
     	String[] partitionStrings = partitionString.split(",");
     	for (String part : partitionStrings) {
     		builder.add(Integer.valueOf(part));
     	}
     	this.partitions = builder.build();
     }
+    
+    public AdHocNPPartitions(JSONObject jsObj, boolean fromKey) throws JSONException
+    {
+    	ImmutableSet.Builder<Integer> builder = ImmutableSet.builder();
+    	String typeString = jsObj.getString("Type");
+    	int type = VoltType.typeFromString(typeString).getValue();
+    	
+        JSONArray pairsArray = jsObj.getJSONArray("Keys");
 
+        for (int i = 0; i < pairsArray.length(); i++) {
+            JSONObject pairObj = pairsArray.getJSONObject(i);
+            Object key = pairObj.getString("Key");
+            int site = TheHashinator.getPartitionForParameter(type, key);
+
+            builder.add(site);
+        }
+    	this.partitions = builder.build();
+    }
 
     public AdHocNPPartitions(JSONObject jsObj) throws JSONException
     {
     	partitions = parseRanges(jsObj);
     }
 
-    private List<Integer> parseRanges(JSONObject jsObj) throws JSONException
+    private Set<Integer> parseRanges(JSONObject jsObj) throws JSONException
     {
-        ImmutableList.Builder<Integer> builder = ImmutableList.builder();
+    	ImmutableSet.Builder<Integer> builder = ImmutableSet.builder();
         JSONArray pairsArray = jsObj.getJSONArray("PartitionId");
 
         for (int i = 0; i < pairsArray.length(); i++) {

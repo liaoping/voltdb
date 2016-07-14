@@ -238,9 +238,6 @@ public class StatementPartitioning implements Cloneable{
         } else {
             m_inferredValue = ConstantValueExpression.extractPartitioningValue(valueType, constExpr);
         }
-        System.out.println("addPartitioningExpression: \nexpr: " + constExpr + 
-        		"\nidx: " + m_inferredParameterIndex + 
-        		"\nval:" + m_inferredValue);
     }
 
     /**

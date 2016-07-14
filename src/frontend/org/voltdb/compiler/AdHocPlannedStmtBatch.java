@@ -340,21 +340,17 @@ public class AdHocPlannedStmtBatch extends AsyncCompilerResult implements Clonea
      */
     public Object partitionParam() {
         if (work.userPartitionKey != null) {
-        	System.out.println("PartParam1");
             return work.userPartitionKey[0];
         }
         if (partitionParamIndex > -1 && work.userParamSet != null &&
                 work.userParamSet.length > partitionParamIndex) {
             Object userParamValue = work.userParamSet[partitionParamIndex];
             if (partitionParamType == null) {
-            	System.out.println("PartParam2");
                 return userParamValue;
             } else {
-            	System.out.println("PartParam3");
                 return ParameterConverter.tryToMakeCompatible(partitionParamType.classFromType(), userParamValue);
             }
         }
-        System.out.println("PartParam4");
         return partitionParamValue;
     }
 
