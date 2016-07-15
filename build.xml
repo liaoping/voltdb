@@ -113,7 +113,7 @@
 </condition>
 
 <!-- Default always round trip DDL in junit. Jenkins will turn this off on master  -->
-<condition property="VOLT_LOG_LEVEL" value="100">
+<condition property="VOLT_LOG_LEVEL" value="500">
     <not><isset property="VOLT_LOG_LEVEL"/></not>
 </condition>
 

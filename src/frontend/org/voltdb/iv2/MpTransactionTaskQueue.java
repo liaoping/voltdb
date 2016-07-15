@@ -42,8 +42,6 @@ public class MpTransactionTaskQueue extends TransactionTaskQueue
 {
     protected static final VoltLogger tmLog = new VoltLogger("TM");
 
-    private static final boolean debugMPTT = false; // XXX REMOVE ME!!
-
     // Track the current writes and reads in progress.  If writes contains anything, reads must be empty,
     // and vice versa
     private final Map<Long, TransactionTask> m_currentWrites = new HashMap<Long, TransactionTask>();
@@ -52,20 +50,20 @@ public class MpTransactionTaskQueue extends TransactionTaskQueue
     private final HashMultimap<Integer, Long> m_currentWriteSites = HashMultimap.create();
     private final HashMultimap<Integer, Long> m_currentReadSites = HashMultimap.create();
 
-    private MpRoSitePool m_sitePool = null;
-    private MpUpdateSitePool m_updateSitePool = null;
+    private MpSitePool m_sitePool = null;
+    private MpSitePool m_updateSitePool = null;
 
     MpTransactionTaskQueue(SiteTaskerQueue queue, long initialTnxId)
     {
         super(queue, initialTnxId);
     }
 
-    void setMpRoSitePool(MpRoSitePool sitePool)
+    void setMpRoSitePool(MpSitePool sitePool)
     {
         m_sitePool = sitePool;
     }
 
-    void setMpUpdateSitePool(MpUpdateSitePool sitePool)
+    void setMpUpdateSitePool(MpSitePool sitePool)
     {
         m_updateSitePool = sitePool;
     }
@@ -174,13 +172,11 @@ public class MpTransactionTaskQueue extends TransactionTaskQueue
     private void taskQueueOffer(TransactionTask task)
     {
         Iv2Trace.logSiteTaskerQueueOffer(task);
-        //if (task.getTransactionState().isReadOnly() || task.getTransactionState().getInvocation().getProcName().startsWith("@AdHoc")) {
-
         if (task.getTransactionState().isReadOnly()) {
             m_sitePool.doWork(task.getTxnId(), task);
         }
         else {
-            // FIXME for Npart hack
+            // UpdateSitePool does not support all procedure types, so only send N-part transactions there
             if(task.getTransactionState().getInvocation() != null &&
                     task.getTransactionState().getInvocation().getProcName().equals("@AdHoc_NP")) {
                 m_updateSitePool.doWork(task.getTxnId(), task);
@@ -194,10 +190,6 @@ public class MpTransactionTaskQueue extends TransactionTaskQueue
         HashMultimap<Integer,Long> currentReadSitesCopy = HashMultimap.create(m_currentReadSites);
         currentReadSitesCopy.keySet().retainAll(((MpTransactionState) task.getTransactionState()).getMasterHSIds().keySet());
 
-        if(debugMPTT && !currentReadSitesCopy.isEmpty()) {
-            System.out.println("Read conflict!");
-            System.out.println("Read sites: " + m_currentReadSites);
-        }
         return !currentReadSitesCopy.isEmpty();
     }
 
@@ -205,10 +197,6 @@ public class MpTransactionTaskQueue extends TransactionTaskQueue
         HashMultimap<Integer,Long> currentWriteSitesCopy = HashMultimap.create(m_currentWriteSites);
         currentWriteSitesCopy.keySet().retainAll(((MpTransactionState) task.getTransactionState()).getMasterHSIds().keySet());
 
-        if(debugMPTT && !currentWriteSitesCopy.isEmpty()) {
-            System.out.println("Write conflict!");
-            System.out.println("Write sites: " + m_currentWriteSites);
-        }
         return !currentWriteSitesCopy.isEmpty();
     }
 
@@ -231,36 +219,25 @@ public class MpTransactionTaskQueue extends TransactionTaskQueue
             TransactionTask task = m_backlog.peekFirst();
 
             while (task != null &&
-                    //((!task.getTransactionState().isReadOnly() && !hasReadSiteConflicts(task) && !hasWriteSiteConflicts(task)) ||
                     ((!task.getTransactionState().isReadOnly() && !hasReadSiteConflicts(task) && !hasWriteSiteConflicts(task) && m_updateSitePool.canAcceptWork()) ||
                     (task.getTransactionState().isReadOnly() && !hasWriteSiteConflicts(task) && m_sitePool.canAcceptWork()))
                     ) {
                 task = m_backlog.pollFirst();
                 if (!task.getTransactionState().isReadOnly()) {
-                    // XXX Add mode for broad R/W lock
-                    //if (m_currentReads.isEmpty() && m_currentWrites.isEmpty()) {
 
                     m_currentWrites.put(task.getTxnId(), task);
                     for (Entry<Integer, Long> entry : ((MpTransactionState) task.getTransactionState()).getMasterHSIds().entrySet()) {
                         m_currentWriteSites.put(entry.getKey(), task.getTxnId());
                     }
-                    if (debugMPTT) {
-                        System.out.println("Added Write sites: " + m_currentWriteSites);
-                    }
                     taskQueueOffer(task);
                     retval = true;
                 }
-
-                //else if (m_currentWrites.isEmpty()) {
                 else {
 
                     assert(task.getTransactionState().isReadOnly());
                     m_currentReads.put(task.getTxnId(), task);
                     for (Entry<Integer, Long> entry : ((MpTransactionState) task.getTransactionState()).getMasterHSIds().entrySet()) {
                         m_currentReadSites.put(entry.getKey(), task.getTxnId());
-                    }
-                    if (debugMPTT) {
-                        System.out.println("Added Read sites: " + m_currentReadSites);
                     }
                     taskQueueOffer(task);
                     retval = true;
@@ -292,9 +269,6 @@ public class MpTransactionTaskQueue extends TransactionTaskQueue
             while(iter.hasNext()) {
                 m_currentReadSites.remove(iter.next(),txnId);
             }
-            if (debugMPTT) {
-                System.out.println("Removed Read sites: " + m_currentReadSites);
-            }
             m_currentReads.remove(txnId);
             m_sitePool.completeWork(txnId);
         }
@@ -305,13 +279,10 @@ public class MpTransactionTaskQueue extends TransactionTaskQueue
             while(iter.hasNext()) {
                 m_currentWriteSites.remove(iter.next(),txnId);
             }
-            if (debugMPTT) {
-                System.out.println("Removed Write sites: " + m_currentWriteSites);
-            }
             m_currentWrites.remove(txnId);
-            //assert(m_currentWrites.isEmpty());
-            // FIXME: Only call for sites sent to the pool
-            m_updateSitePool.completeWork(txnId);
+            if (task.getTransactionState().getInvocation().getProcName().equals("@AdHoc_NP")) {
+                m_updateSitePool.completeWork(txnId);
+            }
         }
         if (taskQueueOffer()) {
             ++offered;

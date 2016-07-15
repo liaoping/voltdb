@@ -92,17 +92,15 @@ public class MpScheduler extends Scheduler
         m_uniqueIdGenerator = new UniqueIdGenerator(partitionId, 0);
     }
 
-    void setMpRoSitePool(MpRoSitePool sitePool)
+    void setMpRoSitePool(MpSitePool sitePool)
     {
         m_pendingTasks.setMpRoSitePool(sitePool);
     }
 
-
-    void setMpUpdateSitePool(MpUpdateSitePool updateSitePool)
+    void setMpUpdateSitePool(MpSitePool updateSitePool)
     {
         m_pendingTasks.setMpUpdateSitePool(updateSitePool);
     }
-
 
     void updateCatalog(String diffCmds, CatalogContext context, CatalogSpecificPlanner csp)
     {
@@ -378,7 +376,7 @@ public class MpScheduler extends Scheduler
         Object param = ParameterConverter.tryToMakeCompatible(String.class, msg.getParameters()[0]);
         try {
             JSONObject jsObj = new JSONObject((String) param);
-            AdHocNPPartitions request = new AdHocNPPartitions(jsObj);
+            AdHocNPPartitions request = new AdHocNPPartitions(jsObj, false);
             Set<Integer> partitionSet = Sets.newHashSet(request.partitions);
 
             return partitionSet;

@@ -1244,10 +1244,6 @@ public final class InvocationDispatcher {
                     }
                 }
                 else {
-                  /*
-                    if(result.errorCode == AsyncCompilerResult.UNINITIALIZED_ERROR_CODE)
-                      System.out.println("GRACEFUL 4 " + result.errorMsg);
-                      */
                     ClientResponseImpl errorResponse =
                         new ClientResponseImpl(
                                 (result.errorCode == AsyncCompilerResult.UNINITIALIZED_ERROR_CODE) ? ClientResponse.GRACEFUL_FAILURE : result.errorCode,
@@ -1438,18 +1434,6 @@ public final class InvocationDispatcher {
             }
             Object partParam = (String) plannedStmtBatch.partitionParam();
             byte[] param = VoltType.valueToBytes(partParam);
-            /*
-            byte[] param = null;
-            try {
-                JSONObject jsObj = new JSONObject((String) plannedStmtBatch.partitionParam());
-                AdHocNPPartitions parts = new AdHocNPPartitions(jsObj,true);
-                param = VoltType.valueToBytes(parts.toJSONString());
-            } catch (JSONException e) {
-                e.printStackTrace();
-            }
-            */
-
-            // explicitly sent partition ids to run transaction on
             task.setParams(param, buf.array());
         }
         else if (isSinglePartition) {

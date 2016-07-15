@@ -65,7 +65,7 @@ public class TestMpTransactionTaskQueue extends TestCase
     }
 
     SiteTaskerQueue m_writeQueue;
-    MpRoSitePool m_MPpool;
+    MpSitePool m_MPpool;
     MpTransactionTaskQueue m_dut;
     TxnEgo txnId;
 
@@ -73,7 +73,7 @@ public class TestMpTransactionTaskQueue extends TestCase
     public void setUp()
     {
         m_writeQueue = mock(SiteTaskerQueue.class);
-        m_MPpool = mock(MpRoSitePool.class);
+        m_MPpool = mock(MpSitePool.class);
         // Accept work for a while
         when(m_MPpool.canAcceptWork()).thenReturn(true);
         m_dut = new MpTransactionTaskQueue(m_writeQueue,TxnEgo.makeZero(MpInitiator.MP_INIT_PID).getTxnId());
