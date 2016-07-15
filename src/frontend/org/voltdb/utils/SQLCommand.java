@@ -728,7 +728,6 @@ public class SQLCommand
     //
     private static void executeStatements(String statements)
     {
-    	System.out.println("New Statements!");
         List<String> parsedStatements = SQLParser.parseQuery(statements);
         for (String statement: parsedStatements) {
             executeStatement(statement);
@@ -910,8 +909,8 @@ public class SQLCommand
         Collections.synchronizedMap(new HashMap<String, List<Boolean>>());
     private static void loadSystemProcedures()
     {
-    	Procedures.put("@AdHoc_NP",
-    			 ImmutableMap.<Integer, List<String>>builder().put( 2, Arrays.asList("varchar", "varchar")).build());
+        Procedures.put("@AdHoc_NP",
+                 ImmutableMap.<Integer, List<String>>builder().put( 2, Arrays.asList("varchar", "varchar")).build());
         Procedures.put("@Pause",
                 ImmutableMap.<Integer, List<String>>builder().put( 0, new ArrayList<String>()).build());
         Procedures.put("@Quiesce",

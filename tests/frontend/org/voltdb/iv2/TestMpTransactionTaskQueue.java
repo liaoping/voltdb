@@ -55,13 +55,13 @@ public class TestMpTransactionTaskQueue extends TestCase
         when(task.getTxnId()).thenReturn(txnid);
         return task;
     }
-    
+
     Map<Integer, Long> generateSiteMap(Integer [] sites, Long id) {
-    	Map<Integer, Long> map = new HashMap<Integer, Long>();
-    	for(int i=0; i < sites.length; i++) {
-    		map.put(sites[i], id);
-    	}
-    	return map;
+        Map<Integer, Long> map = new HashMap<Integer, Long>();
+        for(int i=0; i < sites.length; i++) {
+            map.put(sites[i], id);
+        }
+        return map;
     }
 
     SiteTaskerQueue m_writeQueue;
@@ -80,9 +80,9 @@ public class TestMpTransactionTaskQueue extends TestCase
         m_dut.setMpRoSitePool(m_MPpool);
         txnId = TxnEgo.makeZero(MpInitiator.MP_INIT_PID);
     }
-    
+
     private long offerTransaction(boolean read, Integer [] sites) {
-    	txnId = txnId.makeNext();
+        txnId = txnId.makeNext();
         long m_txnid = txnId.getTxnId();
         m_dut.offer(makeTransactionTask(m_txnid, read, generateSiteMap(sites, m_txnid)));
         System.out.println("Offered " + m_txnid + " " + read);
@@ -134,7 +134,7 @@ public class TestMpTransactionTaskQueue extends TestCase
         Deque<Long> offeredReads = new ArrayDeque<Long>();
         Integer [] sites = new Integer [] {1, 2};
         for (int i = 0; i < 10; i++) {
-        	long m_txnid = offerTransaction(true,sites);
+            long m_txnid = offerTransaction(true,sites);
             offeredReads.push(m_txnid);
             verify(m_MPpool).doWork(eq(m_txnid), any(TransactionTask.class));
         }
@@ -163,7 +163,7 @@ public class TestMpTransactionTaskQueue extends TestCase
         verify(m_MPpool).doWork(eq(readtxnid), any(TransactionTask.class));
         verify(m_MPpool).doWork(eq(readtxnid2), any(TransactionTask.class));
     }
-    
+
     // Reads and Writes can execute concurrently, as long as their sites don't intersect
     @Test
     public void testReadWriteNoBlocking()
@@ -172,7 +172,7 @@ public class TestMpTransactionTaskQueue extends TestCase
         Deque<Long> offeredReads = new ArrayDeque<Long>();
         Integer [] sites = new Integer [] {1, 2};
         for (int i = 0; i < 3; i++) {
-        	long m_txnid = offerTransaction(true,sites);
+            long m_txnid = offerTransaction(true,sites);
             offeredReads.push(m_txnid);
             verify(m_MPpool).doWork(eq(m_txnid), any(TransactionTask.class));
         }
@@ -207,7 +207,7 @@ public class TestMpTransactionTaskQueue extends TestCase
         m_dut.flush(writetxnid2);
         verify(m_MPpool).doWork(eq(readtxnid2), any(TransactionTask.class));
     }
-    
+
     // Reads and Writes can execute concurrently, as long as their sites don't intersect
     @Test
     public void testConcurrentReadWrite()
@@ -218,105 +218,105 @@ public class TestMpTransactionTaskQueue extends TestCase
         Integer [] sitesB = new Integer [] {2, 4};
         Integer [] sitesAB = new Integer [] {1, 2, 3, 4};
         long m_txnid;
-        
+
         // R1 Read from SitesA, W1 Write to SitesB, both should succeed
         m_txnid = offerTransaction(true, sitesA);
         offeredReads.addLast(m_txnid);
         verify(m_MPpool).doWork(eq(m_txnid), any(TransactionTask.class));
-        
+
         m_txnid = offerTransaction(false, sitesB);
         offeredWrites.addLast(m_txnid);
         verify(m_writeQueue).offer(any(TransactionTask.class));
-        
+
         // R2 Read from SitesA (should succeed), R3 Read from SitesB (should wait)
         m_txnid = offerTransaction(true, sitesA);
         offeredReads.addLast(m_txnid);
         verify(m_MPpool).doWork(eq(m_txnid), any(TransactionTask.class));
-        
+
         m_txnid = offerTransaction(true, sitesB);
         offeredReads.addLast(m_txnid);
         verify(m_MPpool, never()).doWork(eq(m_txnid), any(TransactionTask.class));
-        
+
         // W2 Write to SitesA, W3 Write to Sites B (should wait)
         m_txnid = offerTransaction(false, sitesA);
         offeredWrites.addLast(m_txnid);
         verify(m_writeQueue).offer(any(TransactionTask.class));
-        
+
         m_txnid = offerTransaction(false, sitesB);
         offeredWrites.addLast(m_txnid);
         verify(m_writeQueue).offer(any(TransactionTask.class));
-        
+
         // R4 Read from SitesA (should wait)
         m_txnid = offerTransaction(true, sitesA);
         offeredReads.addLast(m_txnid);
         verify(m_MPpool, never()).doWork(eq(m_txnid), any(TransactionTask.class));
-        
+
         // R5 Read SitesAB (should wait)
         m_txnid = offerTransaction(true, sitesAB);
         offeredReads.addLast(m_txnid);
         verify(m_MPpool, never()).doWork(eq(m_txnid), any(TransactionTask.class));
-        
+
         // W4 Write SitesB (should wait)
         m_txnid = offerTransaction(false, sitesB);
         offeredWrites.addLast(m_txnid);
         verify(m_writeQueue).offer(any(TransactionTask.class));
-        
+
         // R6 Read SitesA (should wait)
         m_txnid = offerTransaction(true, sitesA);
         offeredReads.addLast(m_txnid);
         verify(m_MPpool, never()).doWork(eq(m_txnid), any(TransactionTask.class));
-        
+
         // Flush R1, W1, R2: R3, W2 should continue, all others should wait
         m_txnid = offeredReads.removeFirst();
         System.out.println("Flushing " + m_txnid);
         m_dut.flush(m_txnid);
         verify(m_MPpool).completeWork(m_txnid);
-        
+
         m_txnid = offeredReads.removeFirst();
         m_dut.flush(m_txnid);
         verify(m_MPpool).completeWork(m_txnid);
-        
+
         m_txnid = offeredWrites.removeFirst();
         System.out.println("Flushing " + m_txnid);
         m_dut.flush(m_txnid);
-        
+
         verify(m_MPpool).doWork(eq(offeredReads.peekFirst()), any(TransactionTask.class));
         verify(m_writeQueue, times(2)).offer(any(TransactionTask.class));
-        
+
         // Flush R3: W3 should continue, others should wait
-        
+
         m_txnid = offeredReads.removeFirst();
         m_dut.flush(m_txnid);
         verify(m_MPpool).completeWork(m_txnid);
-        
+
         verify(m_writeQueue, times(3)).offer(any(TransactionTask.class));
-        
+
         // Flush W2: R4 should continue
-        
+
         m_txnid = offeredWrites.removeFirst();
         m_dut.flush(m_txnid);
-        
+
         verify(m_MPpool).doWork(eq(offeredReads.peekFirst()), any(TransactionTask.class));
-        
+
         // Flush W3: R5 should continue
-        
+
         m_txnid = offeredWrites.removeFirst();
         m_dut.flush(m_txnid);
-        
+
         verify(m_MPpool).doWork(eq(offeredReads.peekFirst()), any(TransactionTask.class));
-        
+
         // Flush R4, R5: W4, R6 should continue
-        
+
         m_txnid = offeredReads.removeFirst();
         m_dut.flush(m_txnid);
         verify(m_MPpool).completeWork(m_txnid);
-        
+
         verify(m_MPpool).doWork(eq(offeredReads.peekFirst()), any(TransactionTask.class));
-        
+
         m_txnid = offeredReads.removeFirst();
         m_dut.flush(m_txnid);
         verify(m_MPpool).completeWork(m_txnid);
-        
+
         verify(m_MPpool).doWork(eq(offeredReads.peekFirst()), any(TransactionTask.class));
         verify(m_writeQueue, times(4)).offer(any(TransactionTask.class));
 

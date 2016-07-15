@@ -97,13 +97,13 @@ public class MpScheduler extends Scheduler
         m_pendingTasks.setMpRoSitePool(sitePool);
     }
 
-    
+
     void setMpUpdateSitePool(MpUpdateSitePool updateSitePool)
     {
         m_pendingTasks.setMpUpdateSitePool(updateSitePool);
     }
-    
-    
+
+
     void updateCatalog(String diffCmds, CatalogContext context, CatalogSpecificPlanner csp)
     {
         m_pendingTasks.updateCatalog(diffCmds, context, csp);
@@ -307,15 +307,15 @@ public class MpScheduler extends Scheduler
         // Multi-partition initiation (at the MPI)
         MpProcedureTask task = null;
         if (NpProcedureTaskConstructor != null) {
-        	Set<Integer> involvedPartitions = null;
-        	if (isNpTxn(message)) {
-        		if (message.getStoredProcedureName().equalsIgnoreCase("@BalancePartitions")) {
-        			involvedPartitions = getBalancePartitions(message);
-        		} else {
-        			// Generic multi-partition transaction, see if the planner provided a subset of partitions
-        			involvedPartitions = getInvolvedPartitions(message);
-        		}
-        	}
+            Set<Integer> involvedPartitions = null;
+            if (isNpTxn(message)) {
+                if (message.getStoredProcedureName().equalsIgnoreCase("@BalancePartitions")) {
+                    involvedPartitions = getBalancePartitions(message);
+                } else {
+                    // Generic multi-partition transaction, see if the planner provided a subset of partitions
+                    involvedPartitions = getInvolvedPartitions(message);
+                }
+            }
             if (involvedPartitions != null) {
                 HashMap<Integer, Long> involvedPartitionMasters = Maps.newHashMap(m_partitionMasters);
                 involvedPartitionMasters.keySet().retainAll(involvedPartitions);
@@ -368,14 +368,14 @@ public class MpScheduler extends Scheduler
             return null;
         }
     }
-    
+
     /**
      * Extract involved partitions from a request.
      */
     private Set<Integer> getInvolvedPartitions(Iv2InitiateTaskMessage msg)
     {
 
-    	Object param = ParameterConverter.tryToMakeCompatible(String.class, msg.getParameters()[0]);
+        Object param = ParameterConverter.tryToMakeCompatible(String.class, msg.getParameters()[0]);
         try {
             JSONObject jsObj = new JSONObject((String) param);
             AdHocNPPartitions request = new AdHocNPPartitions(jsObj);
@@ -383,8 +383,8 @@ public class MpScheduler extends Scheduler
 
             return partitionSet;
         } catch (JSONException e) {
-        	// Unable to find partitions
-        	System.out.println("Unable to find NP partitions! " + e);
+            // Unable to find partitions
+            //System.out.println("Unable to find NP partitions! " + e);
             return null;
         }
     }

@@ -41,23 +41,23 @@ public class AdHocNPPartitions implements JSONString {
     {
         this.partitions = ImmutableSet.copyOf(partitions);
     }
-    
+
     public AdHocNPPartitions(String partitionString)
     {
-    	ImmutableSet.Builder<Integer> builder = ImmutableSet.builder();
-    	String[] partitionStrings = partitionString.split(",");
-    	for (String part : partitionStrings) {
-    		builder.add(Integer.valueOf(part));
-    	}
-    	this.partitions = builder.build();
+        ImmutableSet.Builder<Integer> builder = ImmutableSet.builder();
+        String[] partitionStrings = partitionString.split(",");
+        for (String part : partitionStrings) {
+            builder.add(Integer.valueOf(part));
+        }
+        this.partitions = builder.build();
     }
-    
+
     public AdHocNPPartitions(JSONObject jsObj, boolean fromKey) throws JSONException
     {
-    	ImmutableSet.Builder<Integer> builder = ImmutableSet.builder();
-    	String typeString = jsObj.getString("Type");
-    	int type = VoltType.typeFromString(typeString).getValue();
-    	
+        ImmutableSet.Builder<Integer> builder = ImmutableSet.builder();
+        String typeString = jsObj.getString("Type");
+        int type = VoltType.typeFromString(typeString).getValue();
+
         JSONArray pairsArray = jsObj.getJSONArray("Keys");
 
         for (int i = 0; i < pairsArray.length(); i++) {
@@ -67,17 +67,17 @@ public class AdHocNPPartitions implements JSONString {
 
             builder.add(site);
         }
-    	this.partitions = builder.build();
+        this.partitions = builder.build();
     }
 
     public AdHocNPPartitions(JSONObject jsObj) throws JSONException
     {
-    	partitions = parseRanges(jsObj);
+        partitions = parseRanges(jsObj);
     }
 
     private Set<Integer> parseRanges(JSONObject jsObj) throws JSONException
     {
-    	ImmutableSet.Builder<Integer> builder = ImmutableSet.builder();
+        ImmutableSet.Builder<Integer> builder = ImmutableSet.builder();
         JSONArray pairsArray = jsObj.getJSONArray("PartitionId");
 
         for (int i = 0; i < pairsArray.length(); i++) {

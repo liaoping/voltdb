@@ -41,8 +41,8 @@ import com.google_voltpatches.common.collect.HashMultimap;
 public class MpTransactionTaskQueue extends TransactionTaskQueue
 {
     protected static final VoltLogger tmLog = new VoltLogger("TM");
-    
-    private static final boolean debugMPTT = true; // XXX REMOVE ME!!
+
+    private static final boolean debugMPTT = false; // XXX REMOVE ME!!
 
     // Track the current writes and reads in progress.  If writes contains anything, reads must be empty,
     // and vice versa
@@ -64,12 +64,12 @@ public class MpTransactionTaskQueue extends TransactionTaskQueue
     {
         m_sitePool = sitePool;
     }
-    
+
     void setMpUpdateSitePool(MpUpdateSitePool sitePool)
     {
         m_updateSitePool = sitePool;
     }
-    
+
     synchronized void updateCatalog(String diffCmds, CatalogContext context, CatalogSpecificPlanner csp)
     {
         m_sitePool.updateCatalog(diffCmds, context, csp);
@@ -81,11 +81,11 @@ public class MpTransactionTaskQueue extends TransactionTaskQueue
         if (m_sitePool != null) {
             m_sitePool.shutdown();
         }
-        
+
         if (m_updateSitePool != null) {
             m_updateSitePool.shutdown();
         }
-        
+
     }
 
     /**
@@ -180,36 +180,36 @@ public class MpTransactionTaskQueue extends TransactionTaskQueue
             m_sitePool.doWork(task.getTxnId(), task);
         }
         else {
-        	// FIXME for Npart hack
-        	if(task.getTransactionState().getInvocation() != null &&
-        			task.getTransactionState().getInvocation().getProcName().equals("@AdHoc_NP")) {
+            // FIXME for Npart hack
+            if(task.getTransactionState().getInvocation() != null &&
+                    task.getTransactionState().getInvocation().getProcName().equals("@AdHoc_NP")) {
                 m_updateSitePool.doWork(task.getTxnId(), task);
-        	} else {
-        		m_taskQueue.offer(task);
-        	}
+            } else {
+                m_taskQueue.offer(task);
+            }
         }
     }
-    
+
     private boolean hasReadSiteConflicts(TransactionTask task) {
         HashMultimap<Integer,Long> currentReadSitesCopy = HashMultimap.create(m_currentReadSites);
-
         currentReadSitesCopy.keySet().retainAll(((MpTransactionState) task.getTransactionState()).getMasterHSIds().keySet());
-        if(debugMPTT && !currentReadSitesCopy.isEmpty()) {
-        	System.out.println("Read conflict!");
-        	System.out.println("Read sites: " + m_currentReadSites);
-        }
-    	return !currentReadSitesCopy.isEmpty();
-    }
-    
-    private boolean hasWriteSiteConflicts(TransactionTask task) {
-    	HashMultimap<Integer,Long> currentWriteSitesCopy = HashMultimap.create(m_currentWriteSites);
 
-        currentWriteSitesCopy.keySet().retainAll(((MpTransactionState) task.getTransactionState()).getMasterHSIds().keySet());
-        if(debugMPTT && !currentWriteSitesCopy.isEmpty()) {
-        	System.out.println("Write conflict!");
-        	System.out.println("Write sites: " + m_currentWriteSites);
+        if(debugMPTT && !currentReadSitesCopy.isEmpty()) {
+            System.out.println("Read conflict!");
+            System.out.println("Read sites: " + m_currentReadSites);
         }
-    	return !currentWriteSitesCopy.isEmpty();
+        return !currentReadSitesCopy.isEmpty();
+    }
+
+    private boolean hasWriteSiteConflicts(TransactionTask task) {
+        HashMultimap<Integer,Long> currentWriteSitesCopy = HashMultimap.create(m_currentWriteSites);
+        currentWriteSitesCopy.keySet().retainAll(((MpTransactionState) task.getTransactionState()).getMasterHSIds().keySet());
+
+        if(debugMPTT && !currentWriteSitesCopy.isEmpty()) {
+            System.out.println("Write conflict!");
+            System.out.println("Write sites: " + m_currentWriteSites);
+        }
+        return !currentWriteSitesCopy.isEmpty();
     }
 
     private boolean taskQueueOffer()
@@ -229,54 +229,49 @@ public class MpTransactionTaskQueue extends TransactionTaskQueue
         if (!m_backlog.isEmpty()) {
             // We may not queue the next task, just peek to get the read-only state
             TransactionTask task = m_backlog.peekFirst();
-            
-            if (task != null) {
-            	System.out.println("Checking task " + task.getTxnId()+ " RO " + task.getTransactionState().isReadOnly() + " w/ sites " + ((MpTransactionState) task.getTransactionState()).getMasterHSIds().keySet());
-            }
-            
+
             while (task != null &&
-            		//((!task.getTransactionState().isReadOnly() && !hasReadSiteConflicts(task) && !hasWriteSiteConflicts(task)) ||
-            		((!task.getTransactionState().isReadOnly() && !hasReadSiteConflicts(task) && !hasWriteSiteConflicts(task) && m_updateSitePool.canAcceptWork()) ||
-            		(task.getTransactionState().isReadOnly() && !hasWriteSiteConflicts(task) && m_sitePool.canAcceptWork()))
-            		) {
-            	task = m_backlog.pollFirst();
-            	System.out.println("Adding task " + task.getTxnId() + " RO " + task.getTransactionState().isReadOnly());
-            	if (!task.getTransactionState().isReadOnly()) {
-            		// XXX Add mode for broad R/W lock
-            		//if (m_currentReads.isEmpty() && m_currentWrites.isEmpty()) {
-                
+                    //((!task.getTransactionState().isReadOnly() && !hasReadSiteConflicts(task) && !hasWriteSiteConflicts(task)) ||
+                    ((!task.getTransactionState().isReadOnly() && !hasReadSiteConflicts(task) && !hasWriteSiteConflicts(task) && m_updateSitePool.canAcceptWork()) ||
+                    (task.getTransactionState().isReadOnly() && !hasWriteSiteConflicts(task) && m_sitePool.canAcceptWork()))
+                    ) {
+                task = m_backlog.pollFirst();
+                if (!task.getTransactionState().isReadOnly()) {
+                    // XXX Add mode for broad R/W lock
+                    //if (m_currentReads.isEmpty() && m_currentWrites.isEmpty()) {
+
                     m_currentWrites.put(task.getTxnId(), task);
                     for (Entry<Integer, Long> entry : ((MpTransactionState) task.getTransactionState()).getMasterHSIds().entrySet()) {
-                    	m_currentWriteSites.put(entry.getKey(), task.getTxnId());
+                        m_currentWriteSites.put(entry.getKey(), task.getTxnId());
                     }
                     if (debugMPTT) {
-                    	System.out.println("Added Write sites: " + m_currentWriteSites);
+                        System.out.println("Added Write sites: " + m_currentWriteSites);
                     }
                     taskQueueOffer(task);
                     retval = true;
                 }
-            
-            	//else if (m_currentWrites.isEmpty()) {
-            	else {
-                
+
+                //else if (m_currentWrites.isEmpty()) {
+                else {
+
                     assert(task.getTransactionState().isReadOnly());
                     m_currentReads.put(task.getTxnId(), task);
                     for (Entry<Integer, Long> entry : ((MpTransactionState) task.getTransactionState()).getMasterHSIds().entrySet()) {
-                    	m_currentReadSites.put(entry.getKey(), task.getTxnId());
+                        m_currentReadSites.put(entry.getKey(), task.getTxnId());
                     }
                     if (debugMPTT) {
-                    	System.out.println("Added Read sites: " + m_currentReadSites);
+                        System.out.println("Added Read sites: " + m_currentReadSites);
                     }
                     taskQueueOffer(task);
                     retval = true;
-                    
+
                 }
-            	// Prime the pump with the head task, if any.  If empty,
+                // Prime the pump with the head task, if any.  If empty,
                 // task will be null
                 task = m_backlog.peekFirst();
-            
+
             }
-            
+
         }
         return retval;
     }
@@ -292,26 +287,26 @@ public class MpTransactionTaskQueue extends TransactionTaskQueue
     {
         int offered = 0;
         if (m_currentReads.containsKey(txnId)) {
-        	TransactionTask task = m_currentReads.get(txnId);
-        	Iterator<Integer> iter = ((MpTransactionState) task.getTransactionState()).getMasterHSIds().keySet().iterator();
+            TransactionTask task = m_currentReads.get(txnId);
+            Iterator<Integer> iter = ((MpTransactionState) task.getTransactionState()).getMasterHSIds().keySet().iterator();
             while(iter.hasNext()) {
-            	m_currentReadSites.remove(iter.next(),txnId);
+                m_currentReadSites.remove(iter.next(),txnId);
             }
             if (debugMPTT) {
-            	System.out.println("Removed Read sites: " + m_currentReadSites);
+                System.out.println("Removed Read sites: " + m_currentReadSites);
             }
             m_currentReads.remove(txnId);
             m_sitePool.completeWork(txnId);
         }
         else {
             assert(m_currentWrites.containsKey(txnId));
-        	TransactionTask task = m_currentWrites.get(txnId);
-        	Iterator<Integer> iter = ((MpTransactionState) task.getTransactionState()).getMasterHSIds().keySet().iterator();
+            TransactionTask task = m_currentWrites.get(txnId);
+            Iterator<Integer> iter = ((MpTransactionState) task.getTransactionState()).getMasterHSIds().keySet().iterator();
             while(iter.hasNext()) {
-            	m_currentWriteSites.remove(iter.next(),txnId);
+                m_currentWriteSites.remove(iter.next(),txnId);
             }
             if (debugMPTT) {
-            	System.out.println("Removed Write sites: " + m_currentWriteSites);
+                System.out.println("Removed Write sites: " + m_currentWriteSites);
             }
             m_currentWrites.remove(txnId);
             //assert(m_currentWrites.isEmpty());

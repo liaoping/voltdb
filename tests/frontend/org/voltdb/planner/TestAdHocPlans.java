@@ -63,7 +63,7 @@ public class TestAdHocPlans extends AdHocQueryTester {
         //DB is empty so the hashable numbers don't really seem to matter
         runAllAdHocSPtests(0, 1, 2, 3);
     }
-    
+
     public void testNP() throws Exception {
         //DB is empty so the hashable numbers don't really seem to matter
         runAllAdHocNPtests(0, 1, 2, 3);

@@ -48,7 +48,7 @@ public class AdHoc_RO_NP extends AdHocBase {
      * @return  results as VoltTable array
      */
     public VoltTable[] run(SystemProcedureExecutionContext ctx,
-            byte[] partitionParam, 
+            byte[] partitionParam,
             byte[] serializedBatchData) {
         return runAdHoc(ctx, serializedBatchData);
     }

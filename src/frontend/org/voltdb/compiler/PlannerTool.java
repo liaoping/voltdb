@@ -174,7 +174,9 @@ public class PlannerTool {
             // If this presents a planning performance problem, we could consider maintaining
             // separate caches for the 3 cases or maintaining up to 3 plans per cache entry
             // if the cases tended to have mostly overlapping queries.
-            if (partitioning.isInferred()) {
+            // FIXME forced MP in cache may be suboptimal for non adhoc_np cases
+            //if (partitioning.isInferred() || !partitioning.wasSpecifiedAsSingle()) {
+            if (true) {
                 // Check the literal cache for a match.
                 AdHocPlannedStatement cachedPlan = m_cache.getWithSQL(sqlIn);
                 if (cachedPlan != null) {
@@ -221,7 +223,9 @@ public class PlannerTool {
                 hasUserQuestionMark  = planner.getAdhocUserParamsCount() > 0;
 
                 // do not put wrong parameter explain query into cache
-                if (!wrongNumberParameters && partitioning.isInferred()) {
+                // FIXME Hack
+                //if (!wrongNumberParameters && ( partitioning.isInferred()|| !partitioning.wasSpecifiedAsSingle())) {
+                if (!wrongNumberParameters) {
                     // if cacheable, check the cache for a matching pre-parameterized plan
                     // if plan found, build the full plan using the parameter data in the
                     // QueryPlanner.
@@ -294,7 +298,9 @@ public class PlannerTool {
             AdHocPlannedStatement ahps = new AdHocPlannedStatement(plan, core);
 
             // do not put wrong parameter explain query into cache
-            if (!wrongNumberParameters && partitioning.isInferred()) {
+            // FIXME Hack
+            //if (!wrongNumberParameters && ( partitioning.isInferred()|| !partitioning.wasSpecifiedAsSingle())) {
+            if (!wrongNumberParameters) {
 
                 // Note either the parameter index (per force to a user-provided parameter) or
                 // the actual constant value of the partitioning key inferred from the plan.

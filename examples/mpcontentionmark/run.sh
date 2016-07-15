@@ -71,10 +71,46 @@ function client-help() {
 }
 
 # run the client that drives the example with some editable options
+function mp_client() {
+    jars-ifneeded
+    java -classpath contentionmark-client.jar:$CLIENTCLASSPATH ContentionMark \
+        --type=3 \
+        --warmup=5 \
+        --duration=30 \
+        --tuples=100 \
+        --servers=$SERVERS
+}
+
+# run the client that drives the example with some editable options
+function np_client() {
+    jars-ifneeded
+    java -classpath contentionmark-client.jar:$CLIENTCLASSPATH ContentionMark \
+        --type=2 \
+        --warmup=5 \
+        --duration=30 \
+        --tuples=100 \
+        --servers=$SERVERS
+}
+
+# run the client that drives the example with some editable options
+function sp_client() {
+    jars-ifneeded
+    java -classpath contentionmark-client.jar:$CLIENTCLASSPATH ContentionMark \
+        --type=1 \
+        --warmup=10 \
+        --duration=60 \
+        --tuples=100 \
+        --servers=$SERVERS
+}
+
+
+# run the client that drives the example with some editable options
 function client() {
     jars-ifneeded
     java -classpath contentionmark-client.jar:$CLIENTCLASSPATH ContentionMark \
-        --duration=5 \
+        --type=0 \
+        --warmup=10 \
+        --duration=20 \
         --tuples=100 \
         --servers=$SERVERS
 }

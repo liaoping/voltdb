@@ -826,14 +826,14 @@ public final class InvocationDispatcher {
         // get the partition params which must exist
         JSONObject jsObj;
         String userPartitions = "";
-		try {
-			jsObj = new JSONObject((String) Arrays.copyOfRange(paramArray, 1, 2)[0]);
-			AdHocNPPartitions partitions = new AdHocNPPartitions(jsObj,true);
-			userPartitions = partitions.toJSONString();
-		} catch (JSONException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
-		}
+        try {
+            jsObj = new JSONObject((String) Arrays.copyOfRange(paramArray, 1, 2)[0]);
+            AdHocNPPartitions partitions = new AdHocNPPartitions(jsObj,true);
+            userPartitions = partitions.toJSONString();
+        } catch (JSONException e) {
+            // TODO Auto-generated catch block
+            e.printStackTrace();
+        }
         Object[] userPartitionKey = new Object[1];
         userPartitionKey[0] = userPartitions;
         Object[] userParams = null;
@@ -1244,6 +1244,10 @@ public final class InvocationDispatcher {
                     }
                 }
                 else {
+                  /*
+                    if(result.errorCode == AsyncCompilerResult.UNINITIALIZED_ERROR_CODE)
+                      System.out.println("GRACEFUL 4 " + result.errorMsg);
+                      */
                     ClientResponseImpl errorResponse =
                         new ClientResponseImpl(
                                 (result.errorCode == AsyncCompilerResult.UNINITIALIZED_ERROR_CODE) ? ClientResponse.GRACEFUL_FAILURE : result.errorCode,
@@ -1420,11 +1424,11 @@ public final class InvocationDispatcher {
         // pick the sysproc based on the presence of partition info
         // HSQL (or PostgreSQL) does not specifically implement AdHoc SP
         // -- instead, use its always-SP implementation of AdHoc
-        
+
         boolean isNPartition = plannedStmtBatch.work.invocationName.equalsIgnoreCase("@AdHoc_NP");
         boolean isSinglePartition = !isNPartition && (plannedStmtBatch.isSinglePartitionCompatible() || m_isConfiguredForNonVoltDBBackend);
         int partition = -1;
-        
+
         if (isNPartition) {
             if (plannedStmtBatch.isReadOnly()) {
                 task.procName = "@AdHoc_RO_NP";
@@ -1437,16 +1441,16 @@ public final class InvocationDispatcher {
             /*
             byte[] param = null;
             try {
-				JSONObject jsObj = new JSONObject((String) plannedStmtBatch.partitionParam());
-	            AdHocNPPartitions parts = new AdHocNPPartitions(jsObj,true);
-	            param = VoltType.valueToBytes(parts.toJSONString());
-			} catch (JSONException e) {
-				e.printStackTrace();
-			}
-			*/
-            
+                JSONObject jsObj = new JSONObject((String) plannedStmtBatch.partitionParam());
+                AdHocNPPartitions parts = new AdHocNPPartitions(jsObj,true);
+                param = VoltType.valueToBytes(parts.toJSONString());
+            } catch (JSONException e) {
+                e.printStackTrace();
+            }
+            */
+
             // explicitly sent partition ids to run transaction on
-            task.setParams(param, buf.array());   	
+            task.setParams(param, buf.array());
         }
         else if (isSinglePartition) {
             if (plannedStmtBatch.isReadOnly()) {
@@ -1467,7 +1471,7 @@ public final class InvocationDispatcher {
                 param = VoltType.valueToBytes(partitionParam);
             }
             partition = TheHashinator.getPartitionForParameter(type, partitionParam);
-        
+
             // Send the partitioning parameter and its type along so that the site can check if
             // it's mis-partitioned. Type is needed to re-hashinate for command log re-init.
             task.setParams(param, (byte)type, buf.array());

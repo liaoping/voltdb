@@ -54,6 +54,14 @@ public class ContentionMark {
             "----------" + "----------" + "----------" + "----------" +
             "----------" + "----------" + "----------" + "----------" + "\n";
 
+    // types of experiment
+    static final int INIT_ONLY = 0;
+    static final int SP = 1;
+    static final int NP = 2;
+    static final int MP = 3;
+    static final int MIX_NP = 4;
+    static final int MIX_MP = 5;
+
     // validated command line configuration
     final ContentionMarkConfig config;
 
@@ -79,6 +87,12 @@ public class ContentionMark {
      * and validation.
      */
     static class ContentionMarkConfig extends CLIConfig {
+        @Option(desc = "Type of experiment (SP=1, NP=2, MP=3, MIX_NP=4, MIX_MP=5).")
+        int type = SP;
+
+        @Option(desc = "Interval for ad hoc selec, in milliseconds.")
+        long selectinterval = 50;
+
         @Option(desc = "Interval for performance feedback, in seconds.")
         long displayinterval = 5;
 
@@ -224,10 +238,10 @@ public class ContentionMark {
         // print out periodic report
         System.out.printf("%02d:%02d:%02d ", time / 3600, (time / 60) % 60, time % 60);
         System.out.printf("Period Throughput %10d/s, ", periodThroughput);
-        System.out.printf("Cumulative Throughput %10d/s, ", cumulativeThroughput);
-        System.out.printf("Cumulative Goodput %10d/s, ", cumulativeGoodput);
-        System.out.printf("Total Successes %10d, ", nowSuccesses);
-        System.out.printf("Total Failures %10d", nowFailures);
+        System.out.printf("Cumulative Throughput %10d/s ", cumulativeThroughput);
+        //System.out.printf("Cumulative Goodput %10d/s, ", cumulativeGoodput);
+        //System.out.printf("Total Successes %10d, ", nowSuccesses);
+        //System.out.printf("Total Failures %10d", nowFailures);
         System.out.printf("\n");
     }
 
@@ -264,6 +278,21 @@ public class ContentionMark {
         }
     }
 
+    void incrementsp() {
+        long id1 = rand.nextInt(config.tuples);
+        long id2 = rand.nextInt(config.tuples);
+        try {
+            client.callProcedure(new CMCallback(), "@AdHoc", "update counters set value = value + 2 where id=" + id1);
+            client.callProcedure(new CMCallback(), "@AdHoc", "update counters set value = value + 2 where id=" + id2);
+        }
+        catch (IOException e) {
+            // This is not ideal error handling for production, but should be
+            // harmless in a benchmark like this
+            try { Thread.sleep(50); } catch (Exception e2) {}
+        }
+    }
+
+
     void incrementmp() {
         long id1 = rand.nextInt(config.tuples);
         long id2 = rand.nextInt(config.tuples);
@@ -278,6 +307,38 @@ public class ContentionMark {
         }
     }
 
+    void selectnp() {
+        long id1 = rand.nextInt(config.tuples);
+        long id2 = rand.nextInt(config.tuples);
+        String ids = "id=" + id1 + " or id=" + id2;
+        String parts="{\"Type\":\"BIGINT\",\"Keys\":[{\"Key\":\""+id1+"\"},{\"Key\":\""+id2+"\"}]}";
+        try {
+            client.callProcedure(new CMCallback(), "@AdHoc_NP", "select * from counters where " + ids, parts);
+        }
+        catch (IOException e) {
+            // This is not ideal error handling for production, but should be
+            // harmless in a benchmark like this
+            try { Thread.sleep(50); } catch (Exception e2) {}
+        }
+        //try { Thread.sleep(100); } catch (Exception e2) {}
+    }
+
+    void selectmp() {
+        long id1 = rand.nextInt(config.tuples);
+        long id2 = rand.nextInt(config.tuples);
+        String ids = "id=" + id1 + " or id=" + id2;
+        try {
+            client.callProcedure(new CMCallback(), "@AdHoc", "select * from counters where " + ids);
+        }
+        catch (IOException e) {
+            // This is not ideal error handling for production, but should be
+            // harmless in a benchmark like this
+            try { Thread.sleep(50); } catch (Exception e2) {}
+        }
+        //try { Thread.sleep(100); } catch (Exception e2) {}
+    }
+
+
 
     void incrementnp() {
         long id1 = rand.nextInt(config.tuples);
@@ -285,7 +346,7 @@ public class ContentionMark {
         long partA = rand.nextInt(8); // 0 - 7
         long partB = rand.nextInt(8); // 0 - 7
         String ids = "id=" + id1 + " or id=" + id2;
-		String parts="{\"Type\":\"BIGINT\",\"Keys\":[{\"Key\":\""+id1+"\"},{\"Key\":\""+id2+"\"}]}";
+        String parts="{\"Type\":\"BIGINT\",\"Keys\":[{\"Key\":\""+id1+"\"},{\"Key\":\""+id2+"\"}]}";
         try {
             client.callProcedure(new CMCallback(), "@AdHoc_NP", "update counters set value = value + 2 where " + ids, parts);
         }
@@ -295,6 +356,90 @@ public class ContentionMark {
             try { Thread.sleep(50); } catch (Exception e2) {}
         }
         //try { Thread.sleep(100); } catch (Exception e2) {}
+    }
+
+    public void runBenchmarkLoop() throws Exception {
+          if (config.type == SP) {
+            incrementsp();
+          }
+          else if (config.type == NP) {
+            incrementnp();
+          }
+          else if (config.type == MP) {
+            incrementmp();
+          }
+          else if (config.type == MIX_NP) {
+            incrementsp();
+            selectnp();
+          }
+          else if (config.type == MIX_MP) {
+            incrementsp();
+            selectmp();
+          }
+
+    }
+    public void runLoopSelect() {
+          if (config.type == MIX_NP) {
+            selectnp();
+          }
+          else if (config.type == MIX_MP) {
+            selectmp();
+          }
+    }
+
+    public void runBenchmarkHeart() throws Exception {
+        System.out.print("\n\n" + HORIZONTAL_RULE);
+        System.out.println(" Starting Benchmark");
+        System.out.println(HORIZONTAL_RULE);
+
+        System.out.println("\nWarming up...");
+        final long warmupEndTime = System.currentTimeMillis() + (1000l * config.warmup);
+        while (warmupEndTime > System.currentTimeMillis()) {
+          runBenchmarkLoop();
+        }
+
+        // reset counters before the real benchmark starts post-warmup
+        incrementCount.set(0);
+        lastPeriod.set(0);
+        failureCount.set(0);
+        lastStatsReportTS = System.currentTimeMillis();
+
+        // print periodic statistics to the console
+        benchmarkStartTS = System.currentTimeMillis();
+        TimerTask statsPrinting = new TimerTask() {
+            @Override
+            public void run() { printStatistics(); }
+        };
+        TimerTask selectTask = new TimerTask() {
+            @Override
+            public void run() { runLoopSelect(); }
+        };
+        Timer timer = new Timer();
+        timer.scheduleAtFixedRate(statsPrinting,
+                                  config.displayinterval * 1000,
+                                  config.displayinterval * 1000);
+        Timer timer2 = new Timer();
+        timer2.scheduleAtFixedRate(selectTask,
+                                  config.selectinterval,
+                                  config.selectinterval);
+
+        // Run the benchmark loop for the requested duration
+        // The throughput may be throttled depending on client configuration
+        System.out.println("\nRunning benchmark...");
+        final long benchmarkEndTime = System.currentTimeMillis() + (1000l * config.duration);
+        while (benchmarkEndTime > System.currentTimeMillis()) {
+          runBenchmarkLoop();
+        }
+
+        // cancel periodic stats printing
+        timer.cancel();
+        timer2.cancel();
+        // block until all outstanding txns return
+        client.drain();
+        // close down the client connections
+        client.close();
+        printStatistics();
+
     }
 
     /**
@@ -318,50 +463,11 @@ public class ContentionMark {
             }
         }
 
-        System.out.print("\n\n" + HORIZONTAL_RULE);
-        System.out.println(" Starting Benchmark");
-        System.out.println(HORIZONTAL_RULE);
+        if (config.type == INIT_ONLY)
+          return;
 
-        System.out.println("\nWarming up...");
-        final long warmupEndTime = System.currentTimeMillis() + (1000l * config.warmup);
-        while (warmupEndTime > System.currentTimeMillis()) {
-            increment();
-        }
+        runBenchmarkHeart();
 
-        // reset counters before the real benchmark starts post-warmup
-        incrementCount.set(0);
-        lastPeriod.set(0);
-        failureCount.set(0);
-        lastStatsReportTS = System.currentTimeMillis();
-
-        // print periodic statistics to the console
-        benchmarkStartTS = System.currentTimeMillis();
-        TimerTask statsPrinting = new TimerTask() {
-            @Override
-            public void run() { printStatistics(); }
-        };
-        Timer timer = new Timer();
-        timer.scheduleAtFixedRate(statsPrinting,
-                                  config.displayinterval * 1000,
-                                  config.displayinterval * 1000);
-
-        // Run the benchmark loop for the requested duration
-        // The throughput may be throttled depending on client configuration
-        System.out.println("\nRunning benchmark...");
-        final long benchmarkEndTime = System.currentTimeMillis() + (1000l * config.duration);
-        while (benchmarkEndTime > System.currentTimeMillis()) {
-            //increment();
-            incrementnp();
-            //incrementmp();
-        }
-
-        // cancel periodic stats printing
-        timer.cancel();
-        // block until all outstanding txns return
-        client.drain();
-        // close down the client connections
-        client.close();
-        printStatistics();
     }
 
     /**
